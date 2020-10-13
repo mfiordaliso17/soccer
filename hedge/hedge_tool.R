@@ -5,25 +5,23 @@ library(ggthemes)
 library(scales)
 
 
+
+
 header <- dashboardHeader(title = "Live Hedge Strategy")
 
-sidebar <- dashboardSidebar(
-    sidebarMenu(
-        menuItem("Research", tabName = "dashboard", icon = icon("dashboard")),
-        menuItem("Execution", tabName = "widgets", icon = icon("th"))
-    )
-)
+sidebar <- dashboardSidebar("User Input",
+                 sliderInput("profit_target", "Profit Target:", 0, 2, 0.5, 0.01),
+                 numericInput("wager", "Wager Amount:", 10),
+                 numericInput("bet", "Initial Odd Bet:", 150))
 
 
 body <- dashboardBody(fluidRow(box(plotOutput("hedge_need_plot")),
                                box(plotOutput("success_plot"))),
-                      fluidRow(box("User Input",
-                                   sliderInput("profit_target", "Profit Target:", 0.01, 2, 0.5),
-                                   numericInput("wager", "Wager Amount:", 10),
-                                   numericInput("bet", "Initial Odd Bet:", 150)),
-                               box(valueBoxOutput("bet_outcome", "Hedge"))
-                               )
+                               box(valueBoxOutput("hedge_amt", "Hedge Amount")),
+                               box(valueBoxOutput("hedge_odd", "Hedge Odd Need"))
                       )
+
+
 
 
 
@@ -142,12 +140,13 @@ server <- shinyServer(function(input, output) {
             ggplot(aes(x = success, y = return, fill = color)) +
             geom_area(color = "black") +
             scale_fill_identity() +
-            theme_tufte() +
+            theme_few() +
             geom_vline(xintercept = break_even) +
             geom_text(aes(x = break_even, y = .1, label = break_even),
                       angle = 90,
                       vjust = -0.5,
-                      size = 5) +
+                      size = 5,
+                      family = "Helvetica") +
             scale_y_continuous(labels = percent,
                                breaks = seq(-1, profit_target(), by = .2)) +
             scale_x_continuous(labels = percent) +
@@ -167,23 +166,28 @@ server <- shinyServer(function(input, output) {
     
         
         
-        output$bet_outcome <- renderValueBox({
+        output$hedge_amt <- renderValueBox({
             
             wager <- reactive({
                 input$wager})
-            #reactive profit target not working
+            
             profit_target <- reactive({
                 input$profit_target})
             
             odds <- reactive({
                 input$bet})
             
+            max_profit <- if (odds() > 0) {
+                odds() / 100
+            } else {
+                -100 / odds()
+            }
+            
             #odds factor
             odds_fctr <-  ifelse(odds() < 0, -100 / odds(), odds() / 100)
             initial_profit <- round(wager() * odds_fctr, 2)
             hedge_amt <- (initial_profit - (wager() * profit_target()))
-            hedge_odd_need <- round(100 * (wager() * profit_target() + wager()) / (hedge_amt), 2)
-            hedge_odd_need <- ifelse(hedge_odd_need < 100, -100 / hedge_odd_need * 100, hedge_odd_need)
+            hedge_amt <- ifelse(profit_target() > max_profit, "NA", round(hedge_amt, 2))
             
             valueBox(
                 paste0("$", hedge_amt),
@@ -196,6 +200,46 @@ server <- shinyServer(function(input, output) {
         
         
     })
+        
+        
+        
+        output$hedge_odd <- renderValueBox({
+            
+            wager <- reactive({
+                input$wager})
+            
+            profit_target <- reactive({
+                input$profit_target})
+            
+            odds <- reactive({
+                input$bet})
+            
+            
+            max_profit <- if (odds() > 0) {
+                odds() / 100
+            } else {
+                -100 / odds()
+            }
+            
+            #odds factor
+            odds_fctr <-  ifelse(odds() < 0, -100 / odds(), odds() / 100)
+            initial_profit <- round(wager() * odds_fctr, 2)
+            hedge_amt <- (initial_profit - (wager() * profit_target()))
+            hedge_odd_need <- round(100 * (wager() * profit_target() + wager()) / (hedge_amt), 2)
+            hedge_odd_need <- ifelse(hedge_odd_need < 100, -100 / hedge_odd_need * 100, hedge_odd_need)
+            hedge_odd_need <- ifelse(profit_target() > max_profit, "NA", round(hedge_odd_need, 1))
+            
+            valueBox(
+                hedge_odd_need,
+                "Hedge Odd Need",
+                icon = icon("list"),
+                color = "purple"
+            )
+            
+            
+            
+            
+        })
 })
     
     

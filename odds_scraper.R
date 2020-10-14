@@ -3,10 +3,8 @@ library(glue)
 library(tidyverse)
 library(xml2)
 
-View(get_lines(sport = "NFL",
-               bet_type = "moneyline",
-               period = "full",
-               start_date = "20200927"))
+
+#build function out for non 4 qtr sports in the future
 
 get_lines <- function(sport,
                       bet_type,
@@ -20,7 +18,7 @@ get_lines <- function(sport,
   
   # initialize results
   final_lines <- data.frame()
-  
+
   # Sport for URL
   SPORT <- case_when(
     sport == "NFL" ~ "nfl-football",
@@ -59,7 +57,6 @@ get_lines <- function(sport,
   }
   
   DATE <- start_date
-  
   
   ## need to loop eventually...
   # url to scrape
@@ -307,3 +304,83 @@ get_lines <- function(sport,
   message(glue("Scraped Day: {DATE}"))
   return(final_lines)
 }
+
+
+
+get_lines_hist <- function(sport,
+                           bet_type,
+                           period,
+                           start_date,
+                           end_date) {
+  
+  ## Error handling
+  if (is.na(as.Date(as.character(start_date), "%Y%m%d"))) {
+    stop("Start Date format is wrong")
+  }
+  
+  # initialize results
+  final_lines <- data.frame()
+  
+  # Sport for URL
+  SPORT <- case_when(
+    sport == "NFL" ~ "nfl-football",
+    sport == "NBA" ~ "nba-basketball",
+    sport == "NCAAF" ~ "college-football",
+    TRUE ~ NA_character_
+  )
+  if (is.na(SPORT)) {
+    stop("Sport must be in c('NFL', 'NBA', 'MCAAF')")
+  }
+  
+  # Type for URL
+  TYPE <- case_when(
+    bet_type == "spread" ~ "spread",
+    bet_type == "total" ~ "totals",
+    bet_type == "moneyline" ~ "money-line",
+    TRUE ~ NA_character_
+  )
+  if (is.na(TYPE)) {
+    stop("Bet Type must be in c('spread', 'total', 'moneyline')")
+  }
+  
+  # Period for URL
+  PERIOD <- case_when(
+    period == "full" ~ "full",
+    period == "1H" ~ "1st-half",
+    period == "2H" ~ "2nd-half",
+    period == "1Q" ~ "1st-quarter",
+    period == "2Q" ~ "2nd-quarter",
+    period == "3Q" ~ "3rd-quarter",
+    period == "4Q" ~ "4th-quarter",
+    TRUE ~ NA_character_
+  )
+  if (is.na(PERIOD)) {
+    stop("Period must be in c('full', '1H', '2H', '1Q', '2Q', '3Q', '4Q')")
+  }
+  
+  
+  day_list <- seq(as.Date(start_date, "%Y%m%d"), as.Date(end_date, "%Y%m%d"), by = "days")
+  
+  day_list <- gsub("-", "", as.character(day_list))
+  
+  
+  
+  df <- lapply(day_list, function(day_list)
+    tryCatch(get_lines(sport,
+                       bet_type,
+                       period,
+                       day_list),
+             error = function(e) e)
+    
+  )
+  
+  
+  df <- df[sapply(df, is.data.frame)]                  
+  
+  df <- Reduce(function(...) merge(..., all = TRUE), df)
+  
+  return(df)
+}
+
+
+

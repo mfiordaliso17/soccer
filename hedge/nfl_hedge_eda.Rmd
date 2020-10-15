@@ -1,0 +1,81 @@
+---
+title: "Hedge Strategy"
+author: "Markus Fiordaliso"
+date: "10/13/2020"
+output: pdf_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F)
+```
+
+
+# Data
+
+```{r include=F}
+# package
+library(tidyverse)
+library(scales)
+library(VIM)
+library(lubridate)
+```
+
+
+```{r include=F}
+odds_df <- read.csv("/Users/markusfiordaliso/Documents/R/sports_bet/hedge/hedge_data/nfl_20100701_20201012_ml.csv") %>% 
+  select(-odds_URL)
+
+```
+
+## Missing Data
+
+
+Bovada seems to be missing the most data. I will leverage Pinnacle due the legitimacy of the book, coupled with the relatively low levels of missing data.
+
+Some scores are missing. After doing some research on a few of these instances, it looks like sportsbookreview is missing these scores even though the game took place. This can be expected to some degree since I didn't pay for the data. I will factor these out of the analysis
+```{r}
+
+
+missing <- map_df(odds_df, ~sum(is.na(.))) %>% 
+  select_if(~any(. > 0))
+
+aggr(odds_df[ , colnames(odds_df) %in% colnames(missing)],
+     sortVars = T,
+     cex.axis = 0.4,
+     oma = c(4,2,1,1))
+                           
+# remove missing scores from df
+
+odds_df <- odds_df %>% 
+  filter(!is.na(away_4Q))
+```
+
+
+## Tidy
+
+```{r}
+source("/Users/markusfiordaliso/Documents/R/sports_bet/odds_functions.R")
+
+odds_df <- odds_manipulate_fn(odds_df)
+
+# using pinnacle as the book
+sports_book <- "pinnacle"
+
+odds_df <- odds_book_remove_fn(odds_df, sports_book)
+```
+
+
+# EDA
+
+
+## Odds
+
+
+```{r}
+odds_df %>% 
+  ggplot(aes(x = pinnacle1)) +
+  geom_density()
+
+```
+

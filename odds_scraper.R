@@ -212,6 +212,9 @@ get_lines <- function(sport,
     sportsbet2 <- sportsbet[[2]]
     
     
+    ### game breaks (quarter, period, half, inning, etc.) add later
+    
+    
     ## dataframe results
     game_lines <- as.data.frame(t(c(DATE,
                                     sport,
@@ -279,7 +282,7 @@ get_lines <- function(sport,
                              "home_open",
                              "pinnacle1",
                              "pinnacle2",
-                             "five_imes1",
+                             "five_dimes1",
                              "five_dimes2",
                              "bookmaker1",
                              "bookmaker2",

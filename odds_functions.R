@@ -26,11 +26,7 @@ odds_manipulate_fn <- function(df) {
     mutate(away_1Q_lead = ifelse(away_1Q_cum > home_1Q_cum, 1, 0),
            away_2Q_lead = ifelse(away_2Q_cum > home_2Q_cum, 1, 0),
            away_3Q_lead = ifelse(away_3Q_cum > home_3Q_cum, 1, 0),
-           away_4Q_lead = ifelse(away_4Q_cum > home_4Q_cum, 1, 0),
-           home_1Q_lead = ifelse(home_1Q_cum > away_1Q_cum, 1, 0),
-           home_2Q_lead = ifelse(home_2Q_cum > away_2Q_cum, 1, 0),
-           home_3Q_lead = ifelse(home_3Q_cum > away_3Q_cum, 1, 0),
-           home_4Q_lead = ifelse(home_4Q_cum > away_4Q_cum, 1, 0))
+           away_4Q_lead = ifelse(away_4Q_cum > home_4Q_cum, 1, 0))
   
   return(df)
   
@@ -68,9 +64,7 @@ odds_book_remove_fn <- function(df, sports_book) {
   return(df)
 }
 
-
 fav_und_odd_score_fn <- function(df, sports_book) {
-  library(rlang)
   
   #error handle
   sports_book_list <- c("pinnacle",
@@ -94,11 +88,28 @@ fav_und_odd_score_fn <- function(df, sports_book) {
   home_book <- rlang::syms(paste0(sports_book, 2))
 
   
-  odds_df <- odds_df %>% 
-    mutate(away_fav = ifelse(paste(!!! away_book) > paste(!!! home_book), 1, 0)) %>% 
-    glimpse()
-           
+  df <- df %>% 
+    mutate(away_fav = ifelse(paste(!!! away_book) <= paste(!!! home_book), 1, 0),
+           #fav score
+           fav_1Q_cum = ifelse(away_fav == 1, away_1Q_cum, home_1Q_cum),
+           fav_2Q_cum = ifelse(away_fav == 1, away_2Q_cum, home_2Q_cum),
+           fav_3Q_cum = ifelse(away_fav == 1, away_3Q_cum, home_3Q_cum),
+           fav_4Q_cum = ifelse(away_fav == 1, away_4Q_cum, home_4Q_cum),
+           #underdog score
+           und_1Q_cum = ifelse(away_fav == 0, away_1Q_cum, home_1Q_cum),
+           und_2Q_cum = ifelse(away_fav == 0, away_2Q_cum, home_2Q_cum),
+           und_3Q_cum = ifelse(away_fav == 0, away_3Q_cum, home_3Q_cum),
+           und_4Q_cum = ifelse(away_fav == 0, away_4Q_cum, home_4Q_cum),
+           #lead indicator
+           fav_1Q_lead = as.factor(ifelse(away_fav == 1, away_1Q_lead, 1 - away_1Q_lead)),
+           fav_2Q_lead = as.factor(ifelse(away_fav == 1, away_2Q_lead, 1 - away_2Q_lead)),
+           fav_3Q_lead = as.factor(ifelse(away_fav == 1, away_3Q_lead, 1 - away_3Q_lead)),
+           fav_4Q_lead = as.factor(ifelse(away_fav == 1, away_4Q_lead, 1 - away_4Q_lead)),
+           #odds
+           fav_odd = as.integer(ifelse(away_fav == 1, paste(!!! away_book), paste(!!! home_book))),
+           und_odd = as.integer(ifelse(away_fav == 0, paste(!!! away_book), paste(!!! home_book))))
 
+  return(df)
 
 }
 

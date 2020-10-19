@@ -8,6 +8,7 @@ output: pdf_document
 ```{r, include=FALSE}
 knitr::opts_chunk$set(echo = F)
 knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message = F)
 ```
 
 
@@ -71,13 +72,10 @@ odds_df <- odds_book_remove_fn(odds_df, sports_book)
 ```
 
 
-# EDA
-
-
-## Odds
+# Odds Overview
 
 Exploring the frequency each odd occurs, as this will give me a better feel on how often I can execute strategies that might target specific odd thresholds. -200:200 is the most frequent odds, which is what I would expect.
-```{r}
+```{r fig.width=7}
 
 odds_df <- fav_und_odd_score_fn(odds_df, sports_book)
 
@@ -113,12 +111,12 @@ und_odd_dist <- odds_df %>%
 
 grid.arrange(fav_odd_dist, und_odd_dist, nrow = 1)
 ```
-Explore spread
+Books do not offer true odds since they are the ones who bear the risk. The books take a 5-10% cut on most bets as seen below. However, as the odds gap between teams increases, so does the cut that the book takes. This is to make up for the lack of liquidity on both sides of the bet, and reduce the overall risk that the book takes on. 
 
-```{r}
+```{r fig.width=7}
 
 odds_df <- odds_df %>% 
-  mutate(book_spread = abs(ifelse(und_odd > 0, fav_odd + und_odd, fav_odd + 100 + und_odd + 100)) / 100)
+  mutate(book_spread = abs(ifelse(und_odd > 0, fav_odd + und_odd, fav_odd + 100 + und_odd + 100)) / 100 / 2)
 
 book_spead_view <- odds_df %>% 
   ggplot(aes(x = book_spread)) +
@@ -129,7 +127,7 @@ book_spead_view <- odds_df %>%
                  color = "black",
                  fill = "purple") +
   coord_cartesian(xlim = c(0, 1),
-                  ylim = c(0, 0.3)) +
+                  ylim = c(0, 0.5)) +
   scale_x_continuous(breaks = seq(0, 1, 0.05)) +
   labs(y = "Frequency",
        title = "Sports Book Spread per $1",
@@ -140,9 +138,36 @@ spread_odd_view <- odds_df %>%
   ggplot(aes(y = und_odd, x = book_spread)) +
   geom_point() +
   geom_smooth() +
+  scale_x_continuous(breaks = seq(1, 10, 1)) +
   labs(title = "Book Spread vs Odds Relationship")
 
 
-grid.arrange(book_spead_view, )
+grid.arrange(book_spead_view, spread_odd_view, ncol = 2)
+```
+
+# Bet the Underdog and Hedge
+
+Picking outright winners can be a challenging feat to generate sustainable profits. The hypothesis is that if a money line position is taken before a game, at some point the odds will improve and an opportunity will present itself to lock in a profit. Specifically, I want to focus on underdogs as this will provide more upside to guarantee a profit as seen below. 
+
+
+```{r}
+odd_tradeoff <- data.frame(odds = round(c(seq(-300, -100, by = 20), seq(120, 300, by = 20)), 0),
+                           odds_fctr =  ifelse(odds < 0, -100 / odds, odds / 100))
+
+odd_tradeoff %>% 
+  ggplot(aes(x = factor(odds), y = odds_fctr)) +
+  geom_col(color = "black", fill = "purple") +
+  scale_y_continuous(labels = percent, breaks = seq(0, 3, 0.5)) +
+  labs(x = "Odds",
+       y = "Profit",
+       title = "Odd Profit Tradeoff")
+
+
+
+```
+
+```{r}
+
+
 ```
 

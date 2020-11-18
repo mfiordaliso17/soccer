@@ -90,6 +90,7 @@ fav_odd_dist <- odds_df %>%
   scale_x_continuous(breaks = seq(-1000, 0, by = 100)) +
   coord_cartesian(xlim = c(-1000, 0),
                   ylim = c(0, 0.6)) +
+  theme(axis.text.x = element_text(angle = 90)) +
   labs(y = "Frequency",
        title = "NFL Favorite Odds Frequency",
        caption = "Excluded odds exceeding -1000")
@@ -105,6 +106,7 @@ und_odd_dist <- odds_df %>%
   scale_x_continuous(breaks = seq(-100, 1000, by = 100)) +
   coord_cartesian(xlim = c(-200, 1000),
                   ylim = c(0, 0.6)) +
+  theme(axis.text.x = element_text(angle = 90)) +
   labs(y = "Frequency",
        title = "NFL Underdog Odds Frequency",
        caption = "Excluded odds exceeding +1000")
@@ -129,9 +131,9 @@ book_spead_view <- odds_df %>%
   coord_cartesian(xlim = c(0, 1),
                   ylim = c(0, 0.5)) +
   scale_x_continuous(breaks = seq(0, 1, 0.05)) +
+  theme(axis.text.x = element_text(angle = 90)) +
   labs(y = "Frequency",
-       title = "Sports Book Spread per $1",
-       caption = "Spread calculates the house difference on betting on both the underdog and favorite")
+       title = "Sports Book Spread per $1")
   
 
 spread_odd_view <- odds_df %>% 
@@ -147,12 +149,16 @@ grid.arrange(book_spead_view, spread_odd_view, ncol = 2)
 
 # Bet the Underdog and Hedge
 
-Picking outright winners can be a challenging feat to generate sustainable profits. The hypothesis is that if a money line position is taken before a game, at some point the odds will improve and an opportunity will present itself to lock in a profit. Specifically, I want to focus on underdogs as this will provide more upside to guarantee a profit as seen below. 
+Picking outright winners can be a challenging feat to generate sustainable profits. Instead I want to focus around hedging a bet during the game to lock in a profit, regardless of outcome. The hypothesis is that if a money line position is taken before a game, at some point the odds will improve and an opportunity will present itself to lock in a profit. Specifically, I want to focus on underdogs as this will provide more upside to guarantee a profit as seen below. However, I will look at both sides when digging into lead changes.
 
 
 ```{r}
-odd_tradeoff <- data.frame(odds = round(c(seq(-300, -100, by = 20), seq(120, 300, by = 20)), 0),
-                           odds_fctr =  ifelse(odds < 0, -100 / odds, odds / 100))
+
+odds <- round(c(seq(-300, -100, by = 20), seq(120, 300, by = 20)), 0)
+odds_fctr <- ifelse(odds < 0, -100 / odds, odds / 100)
+
+odd_tradeoff <- data.frame(odds,
+                           odds_fctr)
 
 odd_tradeoff %>% 
   ggplot(aes(x = factor(odds), y = odds_fctr)) +
@@ -160,14 +166,62 @@ odd_tradeoff %>%
   scale_y_continuous(labels = percent, breaks = seq(0, 3, 0.5)) +
   labs(x = "Odds",
        y = "Profit",
-       title = "Odd Profit Tradeoff")
-
-
+       title = "Odd & Profit Tradeoff")
 
 ```
 
+## Lead Changes
+
+Since I don't have access to historical live odds, I will use lead changes as a proxy to determine changes in odds. The magnitude of the change will be impossible to confirm with this data/approach, but directionally this should give me an idea on how successful this strategy may be. Also, it is important to note that I only have access to scores at the end of each quarter. As a result the true success of this strategy will be limited as I will not be able to capture all lead changes.
+
+Lead changes at any point in the game
+
 ```{r}
+# create var to see if a lead change happened
+odds_df <- odds_df %>% 
+  ungroup() %>% 
+  mutate(fav_quarters_cum_lead = (fav_1Q_lead + fav_2Q_lead + fav_3Q_lead + fav_4Q_lead),
+         und_quarters_cum_lead = (und_1Q_lead + und_2Q_lead + und_3Q_lead + und_4Q_lead))
 
+# summary tables
+fav_lead_chg_summary <- odds_df %>% 
+  group_by(fav_quarters_cum_lead) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  rename("quarters" = fav_quarters_cum_lead) %>% 
+  mutate(freq = count / sum(count),
+         type = "Favorite")
 
+und_lead_chg_summary <- odds_df %>% 
+  group_by(und_quarters_cum_lead) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  rename("quarters" = und_quarters_cum_lead) %>% 
+  mutate(freq = count / sum(count),
+         type = "Underdog")
+
+# graph
+  
+
+bind_rows(fav_lead_chg_summary, und_lead_chg_summary) %>% 
+  ggplot(aes(x = quarters, y = freq, fill = type)) +
+  geom_col(position = "dodge",
+           color = "black") +
+  geom_text(aes(label = percent(freq)),
+            position = position_dodge(width = 1),
+            vjust = -0.3,
+            size = 3) +
+  scale_y_continuous(labels = percent) + 
+  labs(x = "Quarters",
+       y = "Frequency",
+       title = "Quarters led per game",
+       fill = "")
+                 
+# continue to validate data before proceeding to ensure lead changes are good
+odds_df %>% 
+  filter(away_4Q_cum > home_4Q_cum, away_fav == 0, fav_4Q_lead == 1)
+```
+```{r}
+# create range -200:200 to better see if % improve from view above
 ```
 

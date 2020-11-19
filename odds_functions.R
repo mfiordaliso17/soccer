@@ -26,7 +26,12 @@ odds_manipulate_fn <- function(df) {
     mutate(away_1Q_lead = ifelse(away_1Q_cum > home_1Q_cum, 1, 0),
            away_2Q_lead = ifelse(away_2Q_cum > home_2Q_cum, 1, 0),
            away_3Q_lead = ifelse(away_3Q_cum > home_3Q_cum, 1, 0),
-           away_4Q_lead = ifelse(away_4Q_cum > home_4Q_cum, 1, 0))
+           away_4Q_lead = ifelse(away_4Q_cum > home_4Q_cum, 1, 0),
+           # the inverse of away doesn't capture lead changes due to binary coding of ties to 0
+           home_1Q_lead = ifelse(away_1Q_cum < home_1Q_cum, 1, 0),
+           home_2Q_lead = ifelse(away_2Q_cum < home_2Q_cum, 1, 0),
+           home_3Q_lead = ifelse(away_3Q_cum < home_3Q_cum, 1, 0),
+           home_4Q_lead = ifelse(away_4Q_cum < home_4Q_cum, 1, 0))
   
   return(df)
   
@@ -89,6 +94,7 @@ fav_und_odd_score_fn <- function(df, sports_book) {
 
   
   df <- df %>% 
+    #if ml odds are the same, assuming away team is the favorite since the home team is supposed to be given points on a spread
     mutate(away_fav = ifelse(paste(!!! away_book) <= paste(!!! home_book), 1, 0),
            #fav score
            fav_1Q_cum = ifelse(away_fav == 1, away_1Q_cum, home_1Q_cum),
@@ -100,11 +106,16 @@ fav_und_odd_score_fn <- function(df, sports_book) {
            und_2Q_cum = ifelse(away_fav == 0, away_2Q_cum, home_2Q_cum),
            und_3Q_cum = ifelse(away_fav == 0, away_3Q_cum, home_3Q_cum),
            und_4Q_cum = ifelse(away_fav == 0, away_4Q_cum, home_4Q_cum),
-           #lead indicator
-           fav_1Q_lead = as.factor(ifelse(away_fav == 1, away_1Q_lead, 1 - away_1Q_lead)),
-           fav_2Q_lead = as.factor(ifelse(away_fav == 1, away_2Q_lead, 1 - away_2Q_lead)),
-           fav_3Q_lead = as.factor(ifelse(away_fav == 1, away_3Q_lead, 1 - away_3Q_lead)),
-           fav_4Q_lead = as.factor(ifelse(away_fav == 1, away_4Q_lead, 1 - away_4Q_lead)),
+           #lead indicator - ties are shown by a 0
+           fav_1Q_lead = ifelse(fav_1Q_cum > und_1Q_cum, 1, 0),
+           fav_2Q_lead = ifelse(fav_2Q_cum > und_2Q_cum, 1, 0),
+           fav_3Q_lead = ifelse(fav_3Q_cum > und_3Q_cum, 1, 0),
+           fav_4Q_lead = ifelse(fav_4Q_cum > und_4Q_cum, 1, 0),
+           # the inverse of fav doesn't capture lead changes due to binary coding of ties to 0
+           und_1Q_lead = ifelse(fav_1Q_cum < und_1Q_cum, 1, 0),
+           und_2Q_lead = ifelse(fav_2Q_cum < und_2Q_cum, 1, 0),
+           und_3Q_lead = ifelse(fav_3Q_cum < und_3Q_cum, 1, 0),
+           und_4Q_lead = ifelse(fav_4Q_cum < und_4Q_cum, 1, 0),
            #odds
            fav_odd = as.integer(ifelse(away_fav == 1, paste(!!! away_book), paste(!!! home_book))),
            und_odd = as.integer(ifelse(away_fav == 0, paste(!!! away_book), paste(!!! home_book))))
@@ -113,5 +124,18 @@ fav_und_odd_score_fn <- function(df, sports_book) {
 
 }
 
-
+interval_lead_fn <- function(df, game_interval) {
+  
+  if (game_interval == 4) {
+    
+    df <- df %>% 
+      mutate(fav_quarters_cum_lead = (fav_1Q_lead + fav_2Q_lead + fav_3Q_lead + fav_4Q_lead),
+             und_quarters_cum_lead = (und_1Q_lead + und_2Q_lead + und_3Q_lead + und_4Q_lead))
+  } else {
+    
+    stop(glue("function not built out for selected intervals")) }
+  
+  
+  return(df)
+}
 

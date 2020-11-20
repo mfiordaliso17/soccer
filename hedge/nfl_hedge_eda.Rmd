@@ -1,7 +1,6 @@
 ---
-title: "Hedge Strategy"
+title: "NFL Hedge Strategy"
 author: "Markus Fiordaliso"
-date: "10/13/2020"
 output: pdf_document
 ---
 
@@ -181,39 +180,11 @@ Since I don't have access to historical live odds, I will use lead changes as a 
 
 odds_df <- interval_lead_fn(odds_df, 4)
 
-lead_chg_summary_fn <- function(df, fav_und){
-  
-  if (!(fav_und %in% c("favorite", "underdog"))) {
-    stop(glue("fav_und must be in c(favorite, underdog)"))
-  }
-  
-  
-  df <- if (fav_und == "favorite") {
-    df %>% 
-      group_by(fav_quarters_cum_lead) %>%
-      summarize(count = n()) %>% 
-      ungroup() %>% 
-      rename("quarters" = fav_quarters_cum_lead) %>% 
-      mutate(freq = count / sum(count),
-             type = "Favorite")
-  
-  } else {
-    
-    df %>% 
-      group_by(und_quarters_cum_lead) %>% 
-      summarize(count = n()) %>% 
-      ungroup() %>% 
-      rename("quarters" = und_quarters_cum_lead) %>% 
-      mutate(freq = count / sum(count),
-             type = "Underdog")
-    }
-  return(df)
-}
 
 
 # summary tables
-fav_lead_chg_summary <- lead_chg_summary_fn(odds_df, "favorite")
-und_lead_chg_summary <- lead_chg_summary_fn(odds_df, "underdog")
+fav_lead_chg_summary <- lead_chg_qtr_summary_fn(odds_df, "favorite")
+und_lead_chg_summary <- lead_chg_qtr_summary_fn(odds_df, "underdog")
 
 ```
 
@@ -231,15 +202,15 @@ When looking at all games in this data set, there are a few important things to 
 lead_chg_summary <- bind_rows(fav_lead_chg_summary, und_lead_chg_summary)
 
 lead_chg_summary %>% 
-  ggplot(aes(x = quarters, y = freq, fill = type)) +
+  ggplot(aes(x = quarters_led, y = freq, fill = type)) +
   geom_col(position = "dodge",
            color = "black") +
   geom_text(aes(label = percent(freq)),
             position = position_dodge(width = 1),
             vjust = -0.3,
-            size = 3) +
+            size = 2.5) +
   scale_y_continuous(labels = percent) + 
-  labs(x = "Quarters",
+  labs(x = "Quarters Led",
        y = "Frequency",
        title = "Baseline: Quarters led per game",
        fill = "")
@@ -258,8 +229,8 @@ range_odds_df <- odds_df %>%
          und_odd >= min(odds_range))
 
 # summary tables
-range_fav_lead_chg_summary <- lead_chg_summary_fn(range_odds_df, "favorite")
-range_und_lead_chg_summary <- lead_chg_summary_fn(range_odds_df, "underdog")
+range_fav_lead_chg_summary <- lead_chg_qtr_summary_fn(range_odds_df, "favorite")
+range_und_lead_chg_summary <- lead_chg_qtr_summary_fn(range_odds_df, "underdog")
 
 ```
 ```{r}
@@ -272,13 +243,13 @@ range_lead_chg_diff <- range_lead_chg_summary[c(1, 3, 4)] %>%
 
 
 range_lead_chg_summary %>% 
-  ggplot(aes(x = quarters, y = freq, fill = type)) +
+  ggplot(aes(x = quarters_led, y = freq, fill = type)) +
   geom_col(position = "dodge",
            color = "black") +
   geom_text(aes(label = percent(freq)),
             position = position_dodge(width = 1),
             vjust = -0.3,
-            size = 3) +
+            size = 2.5) +
   scale_y_continuous(labels = percent) + 
   labs(x = "Quarters",
        y = "Frequency",
@@ -293,7 +264,7 @@ range_lead_chg_diff %>%
   geom_text(aes(label = round(range_diff, 2)),
             position = position_dodge(width = 1),
             vjust = -0.3,
-            size = 3) +
+            size = 2.5) +
   labs(x = "Quarters",
        y = "pps",
        title = "Range variance to Baseline",
@@ -301,12 +272,72 @@ range_lead_chg_diff %>%
 ```
 
 ```{r}
-# expand range every 20 to figure out how lead changes alter as the range expands. add n to get a feel for sample size as the range narrows/expands
 
-# might need to use a loop or could potentially leverage a fucntion using apply
 
 ## underdog leads at least 1 quarter
 ## favorite leads at least 1 quarter
+
+# create range for list
+interval_amt <- 50
+
+und_filter_range <- seq(100, 700, by = interval_amt)
+fav_filter_range <- seq(-700, -100, by = interval_amt)
+
+# create lists for underdog and favorite
+und_lead_chg_range <-  lapply(und_filter_range, function(x) {
+  
+    
+  # lead change function sourced
+  lead_chg_list <- lead_chg_qtr_summary_fn(odds_df %>%
+                            filter(und_odd <= x), "underdog") %>% 
+    mutate(odd = x)
+  
+  lead_chg_list
+  }
+  )
+
+fav_lead_chg_range <- lapply(fav_filter_range, function(x) {
+  
+    
+  # lead change function sourced
+  lead_chg_list <- lead_chg_qtr_summary_fn(odds_df %>%
+                            filter(fav_odd >= x), "favorite") %>% 
+    mutate(odd = x)
+  
+  lead_chg_list
+  }
+  ) 
+
+
+
+
+
+lead_chg_matrix <- bind_rows(do.call(rbind, und_lead_chg_range),
+                             do.call(rbind, fav_lead_chg_range))
+
+sample_size <- lead_chg_matrix %>% 
+  group_by(type, odd) %>% 
+  summarize(sample_size = sum(count)) %>% 
+  ungroup()
+
+
+# lead at least one quarter
+one_qtr_min <- lead_chg_matrix %>% 
+  filter(quarters_led > 0) %>% 
+  group_by(type, odd) %>% 
+  summarize(cum_freq = sum(freq)) %>% 
+  ungroup() %>% 
+  left_join(sample_size, by = c("type", "odd"))
+
+one_qtr_min %>% 
+  ggplot() +
+  geom_line(aes(x = odd, y = cum_freq, color = type)) +
+  scale_x_continuous(breaks = seq(min(fav_filter_range), max(und_filter_range), by = interval_amt))
+
+```
+
+```{r}
+# reevaluate graph as there appears to be significant diminishing decrease for underdog at -500 or greater. if true could be an interesting component to a strategy
 
 ```
 

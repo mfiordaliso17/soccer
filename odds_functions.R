@@ -89,13 +89,13 @@ fav_und_odd_score_fn <- function(df, sports_book) {
     
   }
   
-  away_book <- rlang::syms(paste0(sports_book, 1))
-  home_book <- rlang::syms(paste0(sports_book, 2))
-
+  away_book <- paste0(sports_book, 1)
+  home_book <- paste0(sports_book, 2)
+  
   
   df <- df %>% 
     #if ml odds are the same, assuming away team is the favorite since the home team is supposed to be given points on a spread
-    mutate(away_fav = ifelse(paste(!!! away_book) <= paste(!!! home_book), 1, 0),
+    mutate(away_fav = ifelse(!!rlang::sym(away_book) <= !!rlang::sym(home_book), 1, 0),
            #fav score
            fav_1Q_cum = ifelse(away_fav == 1, away_1Q_cum, home_1Q_cum),
            fav_2Q_cum = ifelse(away_fav == 1, away_2Q_cum, home_2Q_cum),
@@ -117,11 +117,11 @@ fav_und_odd_score_fn <- function(df, sports_book) {
            und_3Q_lead = ifelse(fav_3Q_cum < und_3Q_cum, 1, 0),
            und_4Q_lead = ifelse(fav_4Q_cum < und_4Q_cum, 1, 0),
            #odds
-           fav_odd = as.integer(ifelse(away_fav == 1, paste(!!! away_book), paste(!!! home_book))),
-           und_odd = as.integer(ifelse(away_fav == 0, paste(!!! away_book), paste(!!! home_book))))
-
+           fav_odd = as.integer(ifelse(away_fav == 1, !!rlang::sym(away_book), !!rlang::sym(home_book))),
+           und_odd = as.integer(ifelse(away_fav == 0, !!rlang::sym(away_book), !!rlang::sym(home_book))))
+  
   return(df)
-
+  
 }
 
 interval_lead_fn <- function(df, game_interval) {
@@ -136,6 +136,35 @@ interval_lead_fn <- function(df, game_interval) {
     stop(glue("function not built out for selected intervals")) }
   
   
+  return(df)
+}
+
+lead_chg_qtr_summary_fn <- function(df, fav_und){
+  
+  if (!(fav_und %in% c("favorite", "underdog"))) {
+    stop(glue("fav_und must be in c(favorite, underdog)"))
+  }
+  
+  
+  df <- if (fav_und == "favorite") {
+    df %>% 
+      group_by(fav_quarters_cum_lead) %>%
+      summarize(count = n()) %>% 
+      ungroup() %>% 
+      rename("quarters_led" = fav_quarters_cum_lead) %>% 
+      mutate(freq = count / sum(count),
+             type = "Favorite")
+    
+  } else {
+    
+    df %>% 
+      group_by(und_quarters_cum_lead) %>% 
+      summarize(count = n()) %>% 
+      ungroup() %>% 
+      rename("quarters_led" = und_quarters_cum_lead) %>% 
+      mutate(freq = count / sum(count),
+             type = "Underdog")
+  }
   return(df)
 }
 

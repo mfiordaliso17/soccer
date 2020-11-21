@@ -272,8 +272,9 @@ min_und_group <- round_any(min(odds_df$und_odd), 100, f = floor)
 
 
 odds_df <- odds_df %>% 
-  mutate(fav_odd_group = cut(fav_odd, breaks = seq(min_fav_group, max_fav_group, by = interval_amt), right = T),
-         und_odd_group = cut(und_odd, breaks= seq(min_und_group, max_und_group, by = interval_amt), right = T))
+  mutate(fav_odd_group = cut(fav_odd, breaks = seq(min_fav_group, max_fav_group, by = interval_amt), right = T, dig.lab = 4),
+         #excluding underdogs who are -
+         und_odd_group = cut(und_odd, breaks= seq(100, max_und_group, by = interval_amt), right = T, dig.lab = 4))
 
 
 und_group_summary <- odds_df %>% 
@@ -316,7 +317,8 @@ one_qtr_min <- group_summary %>%
 #### CONTINUE HERE. GRAPH IS NOT RIGHT #####
 one_qtr_min %>% 
   ggplot() +
-  geom_col(aes(x = odd_group, y = cum_freq, fill = type))
+  geom_col(aes(x = odd_group, y = cum_freq, fill = type), position = "dodge") +
+  theme(axis.text.x = element_text(angle = 90))
 
 
 ```

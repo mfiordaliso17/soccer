@@ -262,22 +262,23 @@ range_lead_chg_diff %>%
 
 interval_amt <- 100
 
-min_fav_group <- round_any(min(odds_df$fav_odd), 100, f = floor)
-max_fav_group <- round_any(max(odds_df$fav_odd), 100, f = ceiling)
 
-max_und_group <- round_any(max(odds_df$und_odd), 100, f = ceiling)
-min_und_group <- round_any(min(odds_df$und_odd), 100, f = floor)
-
-
-
+# excluding out abs ods of 900 as the sample size is too small. Also not including underdogs that have negative lines
 
 odds_df <- odds_df %>% 
-  mutate(fav_odd_group = cut(fav_odd, breaks = seq(min_fav_group, max_fav_group, by = interval_amt), right = T, dig.lab = 4),
+  mutate(fav_odd_group = cut(fav_odd,
+                             breaks = seq(-900, -100, by = interval_amt),
+                             right = T,
+                             dig.lab = 4),
          #excluding underdogs who are -
-         und_odd_group = cut(und_odd, breaks= seq(100, max_und_group, by = interval_amt), right = T, dig.lab = 4))
+         und_odd_group = cut(und_odd, 
+                             breaks = seq(100, 900, by = interval_amt),
+                             right = T, 
+                             dig.lab = 4))
 
 
 und_group_summary <- odds_df %>% 
+  filter(!is.na(und_odd_group)) %>% 
   group_by(und_quarters_cum_lead, und_odd_group) %>% 
   summarize(count = n(),
             type = "underdog") %>% 
@@ -287,6 +288,7 @@ und_group_summary <- odds_df %>%
            "quarters_led" = "und_quarters_cum_lead"))
 
 fav_group_summary <- odds_df %>% 
+  filter(!is.na(fav_odd_group)) %>% 
   group_by(fav_quarters_cum_lead, fav_odd_group) %>% 
   summarize(count = n(),
             type = "favorite") %>% 
@@ -297,7 +299,7 @@ fav_group_summary <- odds_df %>%
 
 # combined df
 
-group_summary <- rbind(und_group_summary, fav_group_summary)
+group_summary <- rbind(fav_group_summary, und_group_summary)
 
 sample_size <- group_summary %>% 
   group_by(type, odd_group) %>% 
@@ -315,10 +317,31 @@ one_qtr_min <- group_summary %>%
 
 
 #### CONTINUE HERE. GRAPH IS NOT RIGHT #####
-one_qtr_min %>% 
+one_qtr_graph <- one_qtr_min %>% 
   ggplot() +
-  geom_col(aes(x = odd_group, y = cum_freq, fill = type), position = "dodge") +
-  theme(axis.text.x = element_text(angle = 90))
+  geom_col(aes(x = odd_group, y = cum_freq, fill = type)) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "none") +
+  labs(x = "Odd Bins",
+       y = "Frequency",
+       title = "Leading at least 1 qtr per game",
+       fill = "")
+
+
+one_qtr_sample_size_graph <- one_qtr_min %>% 
+  ggplot() +
+  geom_col(aes(x = odd_group, y = sample_size, fill = type)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_y_continuous(breaks = seq(0, round_any(max(one_qtr_min$sample_size), f = ceiling, accuracy = 100), by = 200)) +
+  labs(x = "Odd Bins",
+       y = "Count",
+       title = "Sample size",
+       fill = "")
+
+
+grid.arrange(one_qtr_graph, one_qtr_sample_size_graph,
+             nrow = 1)
+
 
 
 ```

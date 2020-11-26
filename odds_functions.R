@@ -168,3 +168,44 @@ lead_chg_qtr_summary_fn <- function(df, fav_und){
   return(df)
 }
 
+lead_qtr_occur_fn <- function(df, col_nm, fav_und, tie_method) {
+  
+  if (!(fav_und %in% c("favorite", "underdog"))) {
+    stop(glue("fav_und must be in c(favorite, underdog)"))
+  }
+  
+  cum_lead_var <- ifelse(fav_und == "favorite", "fav_quarters_cum_lead", "und_quarters_cum_lead")
+  
+  # if cum lead quarters is 0 then no lead was ever realized
+    ifelse(df[, colnames(df) %in% cum_lead_var] == 0, 0,
+           max.col(df[, colnames(df) %in% col_nm] > 0, ties.method = tie_method))
+}
+
+lead_qtr_summary_fn <- function(df, fav_und, initial_last) {
+  
+  if (!(fav_und %in% c("favorite", "underdog"))) {
+    stop(glue("fav_und must be in c(favorite, underdog)"))
+  }
+  
+  type_prefix <- ifelse(fav_und == "favorite", "fav", "und")
+  
+  odd_group <- paste0(type_prefix, "_odd_group")
+  qtr_lead <- paste0(type_prefix, "_", initial_last, "_qtr_lead")
+  
+  df <- df %>% 
+    group_by(!!rlang::sym(odd_group), !!rlang::sym(qtr_lead)) %>% 
+    summarize(count = n()) 
+    
+  colnames(df) <- c("odd_group", paste0(initial_last, "_qtr_lead"), "count")
+  
+  return(df)
+}
+
+
+
+
+
+
+
+
+

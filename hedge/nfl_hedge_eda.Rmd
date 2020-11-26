@@ -1,7 +1,10 @@
 ---
 title: "NFL Hedge Strategy"
 author: "Markus Fiordaliso"
-output: pdf_document
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
 ---
 
 ```{r, include=FALSE}
@@ -22,6 +25,7 @@ library(VIM)
 library(lubridate)
 library(gridExtra)
 library(glue)
+library(rlang)
 ```
 
 
@@ -136,13 +140,14 @@ spread_odd_view <- odds_df %>%
   ggplot(aes(y = und_odd, x = book_spread)) +
   geom_point() +
   geom_smooth() +
-  scale_x_continuous(breaks = seq(1, 10, 1)) +
+  scale_x_continuous(breaks = seq(1, 10, 1),
+                     labels = percent) +
   labs(title = "Book Spread vs Odds Relationship")
 
 grid.arrange(book_spead_view, spread_odd_view, ncol = 2)
 ```
 
-# Bet the Underdog and Hedge
+# Score Volatility Strategy
 
 Picking outright winners can be a challenging feat to generate sustainable profits. Instead I want to focus around hedging a bet during the game to lock in a profit, regardless of outcome. The hypothesis is that if a money line position is taken before a game, at some point the odds will improve and an opportunity will present itself to lock in a profit. Specifically, I want to focus on underdogs as this will provide more upside to guarantee a profit as seen below. However, I will look at both sides when digging into lead changes.
 
@@ -176,6 +181,7 @@ fav_lead_chg_summary <- lead_chg_qtr_summary_fn(odds_df, "favorite")
 und_lead_chg_summary <- lead_chg_qtr_summary_fn(odds_df, "underdog")
 ```
 
+### Quarters led per game
 
 When looking at all games in this data set, there are a few important things to call out:
 
@@ -204,7 +210,9 @@ lead_chg_summary %>%
        fill = "")
 ```
 
-In the initial cut, I was looking at all odds and favorites. Now I will narrow the range to see if that improves the underdog's potential to lead for at least 1 quarter. ADD MORE COMMENTARY AFTER REVIEWING GRAPHS
+In the initial cut, I was looking at all odds and favorites. Now I will narrow the range to see if that improves the underdog's potential to lead for at least 1 quarter.
+
+Unsurprisingly, the proportion of games that an underdog doesn't lead at least 1 quarter decreases significantly. Conversely, the proportion of games that a favorite leads all quarters also decreases significantly. As the odds range narrows, I would expect there to be closer games and more volatility throughout the game with respect to score. 
 
 
 ```{r}
@@ -219,6 +227,7 @@ range_odds_df <- odds_df %>%
 range_fav_lead_chg_summary <- lead_chg_qtr_summary_fn(range_odds_df, "favorite")
 range_und_lead_chg_summary <- lead_chg_qtr_summary_fn(range_odds_df, "underdog")
 ```
+
 ```{r}
 range_lead_chg_summary <- bind_rows(range_fav_lead_chg_summary, range_und_lead_chg_summary) 
 
@@ -257,12 +266,13 @@ range_lead_chg_diff %>%
        title = "Range variance to Baseline",
        fill = "")
 ```
+### Lead at least 1 quarter
 
-```{r}
-
-interval_amt <- 100
+Since I don't care about the outright winner for this strategy, I only need 1 lead change to shift the odds in the favor of a bet to offer a hedge opportunity to lock in a profit.
 
 
+```{r fig.width=10}
+interval_amt <- 50
 # excluding out abs ods of 900 as the sample size is too small. Also not including underdogs that have negative lines
 
 odds_df <- odds_df %>% 
@@ -316,12 +326,23 @@ one_qtr_min <- group_summary %>%
   left_join(sample_size, by = c("type", "odd_group"))
 
 
-#### CONTINUE HERE. GRAPH IS NOT RIGHT #####
+
+```
+
+To better see trends amongst the odds, I'm going to bucket the odds into bins and see how they perform.
+
+As expected, there is a strong inverse relationship between the odds group and probaility that the group led at least 1 quarter. The correlation is `r round(cor(as.numeric(one_qtr_min$odd_group), one_qtr_min$cum_freq), 2)`. Overall, this relationship appears to be somewhat linear.
+
+Given limited upside when betting large favorites, I want to focus on small favorites and small to medium underdogs. Also, the lack of a sample size with some of the more extreme odds is a factor into this decision.
+
+```{r fig.width=10}
 one_qtr_graph <- one_qtr_min %>% 
-  ggplot() +
-  geom_col(aes(x = odd_group, y = cum_freq, fill = type)) +
+  ggplot(aes(x = odd_group, y = cum_freq, fill = type)) +
+  geom_col() +
+  geom_smooth(aes(x = as.numeric(odd_group), y = cum_freq),
+              se = F) +
   theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+        legend.position = "bottom") +
   labs(x = "Odd Bins",
        y = "Frequency",
        title = "Leading at least 1 qtr per game",
@@ -329,10 +350,11 @@ one_qtr_graph <- one_qtr_min %>%
 
 
 one_qtr_sample_size_graph <- one_qtr_min %>% 
-  ggplot() +
-  geom_col(aes(x = odd_group, y = sample_size, fill = type)) +
-  theme(axis.text.x = element_text(angle = 90)) +
-  scale_y_continuous(breaks = seq(0, round_any(max(one_qtr_min$sample_size), f = ceiling, accuracy = 100), by = 200)) +
+  ggplot(aes(x = odd_group, y = sample_size, fill = type)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "bottom") +
+  scale_y_continuous(breaks = seq(0, round_any(max(one_qtr_min$sample_size), f = ceiling, accuracy = 100), by = 100)) +
   labs(x = "Odd Bins",
        y = "Count",
        title = "Sample size",
@@ -341,7 +363,45 @@ one_qtr_sample_size_graph <- one_qtr_min %>%
 
 grid.arrange(one_qtr_graph, one_qtr_sample_size_graph,
              nrow = 1)
-
-
-
 ```
+
+
+### When does the lead change occur
+
+
+```{r}
+
+# col for lead change
+fav_lead_name <- c("fav_1Q_lead", "fav_2Q_lead", "fav_3Q_lead", "fav_4Q_lead")
+und_lead_name <- c("und_1Q_lead", "und_2Q_lead", "und_3Q_lead", "und_4Q_lead")
+
+# fav variables
+odds_df$fav_initial_qtr_lead <- lead_qtr_occur_fn(odds_df, fav_lead_name, "favorite", "first")
+odds_df$fav_last_qtr_lead <- lead_qtr_occur_fn(odds_df, fav_lead_name, "favorite", "last")
+
+
+# und variables
+odds_df$und_initial_qtr_lead <- lead_qtr_occur_fn(odds_df, und_lead_name, "underdog", "first")
+odds_df$und_last_qtr_lead <- lead_qtr_occur_fn(odds_df, und_lead_name, "underdog", "last")
+
+
+# initial
+bind_rows(lead_qtr_summary_fn(odds_df, "favorite", "initial"),
+          lead_qtr_summary_fn(odds_df, "underdog", "initial"))
+
+# final
+
+# visualize
+
+## geom_tile
+```
+
+
+
+
+
+
+
+# Considerations
+* Lead changes might not occur until the final drive
+* Lead changes may result in not enough of a shift in odds to hedge

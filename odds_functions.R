@@ -1,5 +1,6 @@
 library(tidyverse)
 library(lubridate)
+library(rlang)
 
 
 odds_manipulate_fn <- function(df) {
@@ -95,7 +96,7 @@ fav_und_odd_score_fn <- function(df, sports_book) {
   
   df <- df %>% 
     #if ml odds are the same, assuming away team is the favorite since the home team is supposed to be given points on a spread
-    mutate(away_fav = ifelse(!!rlang::sym(away_book) <= !!rlang::sym(home_book), 1, 0),
+    mutate(away_fav = ifelse(!!sym(away_book) <= !!sym(home_book), 1, 0),
            #fav score
            fav_1Q_cum = ifelse(away_fav == 1, away_1Q_cum, home_1Q_cum),
            fav_2Q_cum = ifelse(away_fav == 1, away_2Q_cum, home_2Q_cum),
@@ -117,8 +118,8 @@ fav_und_odd_score_fn <- function(df, sports_book) {
            und_3Q_lead = ifelse(fav_3Q_cum < und_3Q_cum, 1, 0),
            und_4Q_lead = ifelse(fav_4Q_cum < und_4Q_cum, 1, 0),
            #odds
-           fav_odd = as.integer(ifelse(away_fav == 1, !!rlang::sym(away_book), !!rlang::sym(home_book))),
-           und_odd = as.integer(ifelse(away_fav == 0, !!rlang::sym(away_book), !!rlang::sym(home_book))))
+           fav_odd = as.integer(ifelse(away_fav == 1, !!sym(away_book), !!sym(home_book))),
+           und_odd = as.integer(ifelse(away_fav == 0, !!sym(away_book), !!sym(home_book))))
   
   return(df)
   
@@ -193,10 +194,12 @@ lead_qtr_summary_fn <- function(df, fav_und, initial_last) {
   qtr_lead <- paste0(type_prefix, "_", initial_last, "_qtr_lead")
   
   df <- df %>% 
-    group_by(!!rlang::sym(odd_group), !!rlang::sym(qtr_lead)) %>% 
-    summarize(count = n()) 
+    group_by(!!sym(odd_group), !!sym(qtr_lead)) %>% 
+    summarize(count = n()) %>% 
+    group_by(!!sym(odd_group)) %>% 
+    mutate(freq = count / sum(count))
     
-  colnames(df) <- c("odd_group", paste0(initial_last, "_qtr_lead"), "count")
+  colnames(df) <- c("odd_group", paste0(initial_last, "_qtr_lead"), "count", "freq")
   
   return(df)
 }

@@ -17,7 +17,7 @@ sidebar <- dashboardSidebar("User Input",
 
 body <- dashboardBody(fluidRow(box(plotOutput("hedge_need_plot")),
                                box(plotOutput("success_plot"))),
-                               box(valueBoxOutput("hedge_amt", "3Hedge Amount")),
+                               box(valueBoxOutput("hedge_amt", "Hedge Amount")),
                                box(valueBoxOutput("hedge_odd", "Hedge Odd Need"))
                       )
 

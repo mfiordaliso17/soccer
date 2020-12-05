@@ -20,7 +20,7 @@ knitr::opts_chunk$set(message = F)
 # package
 library(tidyverse)
 library(scales)
-
+library(glue)
 ```
 
 
@@ -100,22 +100,31 @@ sample_size_success <- lapply(sample_list, function(x) {
 
 sample_size_success <- do.call(rbind, sample_size_success)
 
+# min success to break even
+
+min_success <- wager / (profit_2_leg_2 + wager)
+
+sample_size_success$color_pos_neg <- ifelse(sample_size_success$success > min_success, "green", "red")
+
 sample_size_success %>% 
-  ggplot(aes(x = n, y = success)) +
-  geom_point(alpha = 0.3,
-             color = "blue") +
-  geom_hline(yintercept = 0.5,
+  ggplot(aes(x = n, y = success, color = color_pos_neg)) +
+  geom_point(alpha = 0.9) +
+  scale_color_identity() +
+  geom_hline(yintercept = min_success,
              linetype = "dashed",
-             color = "red",
-             size = 2) +
+             color = "black",
+             size = 1) +
+  geom_text(aes(y = min_success,
+                x = 1000,
+                label = glue("Break Even: ", round(min_success, 3))),
+            color = "black",
+            vjust = 1.5) +
   scale_y_continuous(breaks = seq(0, 0.75, by = 0.25),
                      limits = c(0, 0.75))
 ```
 
 Min success needed to break even
 ```{r}
-
-
 (profit_2_leg_2 * min_success) + ((1 - min_success) * -wager)
 
 success_list <- seq(0, 0.7, by = 0.01)
@@ -131,7 +140,7 @@ success_roi <- lapply(success_list, function(x) {
 })
 
 
-min_success <- wager / (profit_2_leg_2 + wager)
+
 
 success_roi <- do.call(rbind, success_roi)
 

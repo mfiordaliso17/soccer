@@ -107,11 +107,40 @@ sample_size_success %>%
   geom_hline(yintercept = 0.5,
              linetype = "dashed",
              color = "red",
-             size = 2)
+             size = 2) +
+  scale_y_continuous(breaks = seq(0, 0.75, by = 0.25),
+                     limits = c(0, 0.75))
 ```
 
 Min success needed to break even
 ```{r}
 
+
+(profit_2_leg_2 * min_success) + ((1 - min_success) * -wager)
+
+success_list <- seq(0, 0.7, by = 0.01)
+
+success_roi <- lapply(success_list, function(x) {
+  
+  roi <- ((profit_2_leg_2 * x) + ((1 - x) * -wager)) / wager
+  
+  df <- data.frame(success = x,
+                   roi)
+  
+  return(df)
+})
+
+
+min_success <- wager / (profit_2_leg_2 + wager)
+
+success_roi <- do.call(rbind, success_roi)
+
+success_roi$fill_pos_neg <- ifelse(success_roi$roi > 0, "green", "red")
+
+success_roi %>% 
+  ggplot(aes(x = success, y = roi, fill = fill_pos_neg)) +
+  geom_area() +
+  scale_fill_identity() +
+  geom_vline(xintercept = min_success)
 ```
 

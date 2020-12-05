@@ -1,0 +1,117 @@
+---
+title: "Parlay Odd Boost"
+author: "Markus Fiordaliso"
+date: "12/4/2020"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message = F)
+```
+
+
+```{r include=F}
+# package
+library(tidyverse)
+library(scales)
+
+```
+
+
+```{r}
+source("/Users/markusfiordaliso/Documents/R/sports_bet/odds_functions.R")
+```
+
+
+# Parlay
+
+```{r}
+wager <- 10
+odd <- odd_fraction_fn(-110)
+parlay_odd <- odd_fraction_fn(265)
+
+
+# bet 1 outright
+profit_1 <- (wager * odd)
+scenario_1 <- ((profit_1 * 0.5) - (wager * 0.5)) / wager
+
+# parlay 2 legs
+
+## first leg is a win and bet is still live
+profit_2_leg_1 <- wager * parlay_odd
+
+## second leg hedge to generate even profit, regardless of outcome
+profit_2_leg_2 <- (profit_2_leg_1 / (1 + odd))
+
+## final return
+scenario_2 <- (((profit_2_leg_1 - profit_2_leg_2) * 0.5) - (wager * 0.5)) / wager
+
+
+# df
+bet_scenario <- data.frame(bet = c("single", "parlay_2_leg"),
+                           expected_return = c(scenario_1, scenario_2))
+
+
+bet_scenario$fill_pos_neg <- ifelse(bet_scenario$expected_return > 0, "green", "red")
+
+bet_scenario %>% 
+  ggplot(aes(x = bet, y = expected_return, fill = fill_pos_neg)) +
+  geom_col(color = "black") +
+  geom_text(aes(label = percent(round(expected_return, 2))),
+            vjust = -0.5) +
+  scale_fill_identity() +
+  scale_y_continuous(labels = percent,
+                     limits = c(-0.1, 0.2)) +
+  labs(x = "",
+       y = "Expected Return")
+
+```
+
+sample size impact on success
+```{r}
+# binary coding for success
+
+
+sample_list <- seq(1, 2000, by = 5)
+
+sample_size_success <- lapply(sample_list, function(x) {
+  
+  set.seed(2)
+
+  outcome <- sample(c(0, 1), size = x, replace = T)
+  
+  # win = 1
+  # lose = 0
+  
+  success <- sum(outcome) / length(outcome)
+  
+  df <- data.frame(n = x,
+                   success)
+  
+  return(df)
+})
+
+
+sample_size_success <- do.call(rbind, sample_size_success)
+
+sample_size_success %>% 
+  ggplot(aes(x = n, y = success)) +
+  geom_point(alpha = 0.3,
+             color = "blue") +
+  geom_hline(yintercept = 0.5,
+             linetype = "dashed",
+             color = "red",
+             size = 2)
+```
+
+Min success needed to break even
+```{r}
+
+```
+

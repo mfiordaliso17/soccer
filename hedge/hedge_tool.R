@@ -122,22 +122,22 @@ server <- shinyServer(function(input, output) {
             input$profit_target})
         
         success <- seq(.1, 1, by = 0.01)
-        return <- ((success * profit_target() * wager) - ((1 - success) * wager) / wager)
+        expected_return <- ((success * profit_target() * wager) - ((1 - success) * wager) / wager)
         
         success_df <- data.frame(success,
-                                 return)
+                                 expected_return)
         
         
         
         # graph
         
         break_even <- min(success_df %>% 
-                              filter(return >= 0) %>% 
+                              filter(expected_return >= 0) %>% 
                               select(success))
         
         success_df %>%
-            mutate(color = ifelse(return > 0, "green", "red")) %>% 
-            ggplot(aes(x = success, y = return, fill = color)) +
+            mutate(color = ifelse(expected_return > 0, "green", "red")) %>% 
+            ggplot(aes(x = success, y = expected_return, fill = color)) +
             geom_area(color = "black") +
             scale_fill_identity() +
             theme_few() +

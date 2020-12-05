@@ -335,7 +335,7 @@ As expected, there is a strong inverse relationship between the odds group and p
 
 Given limited upside when betting large favorites, I want to focus on small favorites and small to medium underdogs. Also, the lack of a sample size with some of the more extreme odds is a factor into this decision.
 
-```{r fig.width=8, fig.height=5}
+```{r fig.width=9, fig.height=5}
 one_qtr_graph <- one_qtr_min %>% 
   ggplot(aes(x = odd_group, y = cum_freq, fill = type)) +
   geom_col() +
@@ -370,12 +370,12 @@ grid.arrange(one_qtr_graph, one_qtr_sample_size_graph,
 
 Assessing when the initial lead change occurs is important to understand when a hedge opportunity may present itself. Also, since odd changes are like correlated with when the lead exists in the game, understanding when the final lead change occurs may allow additional upside to be realized in a hedge. In addition to the timing of the lead change, the magnitude of the lead change is also important when assessing hedge opportunities. However, since I don't have access to live odds, I'm going to choose to table this and potentially come back to it.
 
-Initial lead change:
+*Initial lead change:*
 
 * If a lead change is going to occur at all in the game, there is a strong probability that occurs in the first quarter
 * Across most of the odd bins, there is a relatively small chance that if a lead change doesn't occur in the first half that it will occur in the second
 
-Final lead change: 
+*Final lead change:*
 
 * The final lead change is somewhat misleading as a majority of the final lead changes, if they are to occur, take place in 4th quarter across all odd bins. This simply reflects the winners of the game
 * There is minimal final lead changes that occur in quarters 1-3 for all favorite odd bins, if a lead change is going to occur
@@ -438,33 +438,51 @@ last_qtr_summary %>%
 ```
 ## Profitability Target
 
-Illustrate difference between profitability target and success needed
+The view below shows the success rate needed given 2 inputs: expected return and profit target
+
+* Expected Return: The desired return on investment
+  + A value of 0 represents the break even point
+* Profit Target: The profit profit levels that the hedge is working to target
+  + 50% example: +150 initial odd is eventually hedged with a +150, locking in a 50% profit
+  + 0.25 example: +150 initial odd is eventually hedged with a +100, locking in a 25% profit
+
 
 ```{r}
 
 # success and break even
-wager <- 1
-return <- 0.1
 
-profit_target <- seq(0.1, 1, by = 0.1)
+return_list <- seq(0.0, 1, by = 0.1)
 
-profit_target / (1 - return)
+profit_return <- lapply(return_list, function(x) {
 
-return = ((success * profit_target() ) - ((1 - success)))
+  
+  profit_target <- seq(0.1, 1, by = 0.1)
+  
+  success <- (x + 1)/(1 + profit_target)
+  
+  # > 100% is not possible
+  success[success > 1] <- NA
+  
+  df <- data.frame(profit_target,
+                   success,
+                   expected_return = x)
+  
+  return(df)
+  })
 
-success <- 0.9
+profit_return <- do.call(rbind, as.list(profit_return))
 
-return = 0.5success - (1 - success)
+profit_return %>% 
+  ggplot(aes(x = profit_target, y = success, color = as.factor(expected_return))) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Profit Target",
+       y = "Success Rate",
+       color = "Expected Return")
 
-return + 1 - success = 0.5success
-
-0.5 success + success = return + 1 
-
-profit_target * (return + 1)
 ```
 
 
-# Baseline - bet on the outright winner
 
 
 

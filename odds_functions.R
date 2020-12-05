@@ -204,6 +204,11 @@ lead_qtr_summary_fn <- function(df, fav_und, initial_last) {
   return(df)
 }
 
+odd_fraction_fn <- function(odd) {
+  odd_factor <- ifelse(odd < 0, -100 / odd, odd / 100)
+  
+  return(odd_factor)
+}
 
 
 

@@ -1,0 +1,44 @@
+---
+title: "Soccer - Bet Win and Draw"
+author: "Markus Fiordaliso"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message = F)
+```
+
+# Data
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+odds_df <- get_lines_hist_soccer(sport = "soccer_epl",
+                           start_date = "20201205",
+                           end_date = "20201206")
+```
+
+## Tidy
+```{r}
+source("/Users/markusfiordaliso/Documents/coding_projects/sports_bet/odds_functions.R")
+
+
+# use pinnacle
+sports_book <- "pinnacle"
+
+odds_df <- odds_book_remove_fn(odds_df, sports_book)
+
+
+
+```
+
+
+
+

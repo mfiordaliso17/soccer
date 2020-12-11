@@ -58,7 +58,7 @@ odds_df <- odds_df %>%
 ## Tidy
 
 ```{r}
-source("/Users/markusfiordaliso/Documents/R/sports_bet/odds_functions.R")
+source("/Users/markusfiordaliso/Documents/coding_projects/sports_bet/odds_functions.R")
 odds_df <- odds_manipulate_fn(odds_df)
 
 # using pinnacle as the book

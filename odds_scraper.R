@@ -6,6 +6,10 @@ library(xml2)
 
 #build function out for non 4 qtr sports in the future
 
+
+# football & basketball ---------------------------------------------------
+
+
 get_lines <- function(sport,
                       bet_type,
                       period,
@@ -27,7 +31,7 @@ get_lines <- function(sport,
     TRUE ~ NA_character_
   )
   if (is.na(SPORT)) {
-    stop("Sport must be in c('NFL', 'NBA', 'MCAAF')")
+    stop("Sport must be in c('NFL', 'NBA', 'NCAAF')")
   }
   
   # Type for URL
@@ -60,7 +64,6 @@ get_lines <- function(sport,
   
   ## need to loop eventually...
   # url to scrape
-  oddsURL <- glue("https://classic.sportsbookreview.com/betting-odds/{SPORT}/{TYPE}/{PERIOD}/?date={DATE}")
   
   if (PERIOD == "full") {
     oddsURL <- glue("https://classic.sportsbookreview.com/betting-odds/{SPORT}/{TYPE}/?date={DATE}")
@@ -74,6 +77,7 @@ get_lines <- function(sport,
       oddsURL <- glue("https://classic.sportsbookreview.com/betting-odds/{SPORT}/?date={DATE}")
     }
   }
+
   
   ## need to loop eventually...
   oddspage <- read_html(oddsURL)
@@ -309,7 +313,6 @@ get_lines <- function(sport,
 }
 
 
-
 get_lines_hist <- function(sport,
                            bet_type,
                            period,
@@ -329,10 +332,11 @@ get_lines_hist <- function(sport,
     sport == "NFL" ~ "nfl-football",
     sport == "NBA" ~ "nba-basketball",
     sport == "NCAAF" ~ "college-football",
+    sport == "soccer_epl" ~ "english-premier-league",
     TRUE ~ NA_character_
   )
   if (is.na(SPORT)) {
-    stop("Sport must be in c('NFL', 'NBA', 'MCAAF')")
+    stop("Sport must be in c('NFL', 'NBA', 'NCAAF', 'soccer_epl')")
   }
   
   # Type for URL
@@ -384,6 +388,322 @@ get_lines_hist <- function(sport,
   
   return(df)
 }
+
+
+
+
+
+# soccer ------------------------------------------------------------------
+
+
+get_lines_soccer <- function(sport,
+                             start_date){
+  # initialize results
+  final_lines <- data.frame()
+  
+  ## Error handling
+  if (is.na(as.Date(as.character(start_date), "%Y%m%d"))) {
+    stop("Start Date format is wrong")
+  }
+  
+  # Sport for URL
+  SPORT <- case_when(
+    sport == "soccer_epl" ~ "english-premier-league",
+    TRUE ~ NA_character_
+  )
+  if (is.na(SPORT)) {
+    stop("Sport must be in c('soccer_epl')")
+  }
+  
+  
+  DATE <- start_date
+  
+  ## need to loop eventually...
+  # url to scrape
+  
+  oddsURL <- glue("https://classic.sportsbookreview.com/betting-odds/soccer/?leagueId={SPORT}&date={DATE}")
+  
+  
+  oddspage <- read_html(oddsURL)
+  node <- html_nodes(oddspage, "div.event-holder.holder-complete")
+  games <- length(node)
+  
+  for (game in 1:games) {
+    # main child
+    child1 <- html_children(node[game])
+    
+    ## Teams
+    teams <- html_children(child1)[5] %>%
+      html_children() %>%
+      html_text()
+    
+    ### in soccer first listed team is the home team
+    homeTeam <- teams[[1]]
+    awayTeam <- teams[[2]]
+    
+    # get Scoring
+    
+    ## Period Score
+    period_scores <- node[game] %>%
+      html_nodes(".period") %>%
+      html_text()
+    
+    home_1 <- as.integer(period_scores[1])
+    home_2 <- as.integer(period_scores[2])
+    
+    away_1 <- as.integer(period_scores[3])
+    away_2 <- as.integer(period_scores[4])
+    
+    
+    ## Final Score
+    final_scores <- node[game] %>%
+      html_nodes(".total") %>%
+      html_text()
+    
+    home_score <- as.integer(final_scores[1])
+    away_score <- as.integer(final_scores[2])
+    
+    
+    ## Opening Line
+    open <- html_children(child1)[7]
+    
+    home_open <- html_children(open)[1] %>%
+      html_text()
+    
+    away_open <- html_children(open)[2] %>%
+      html_text()
+    
+    tie_open <- html_children(open)[3] %>%
+      html_text()
+    
+    ### SportsBooks
+    # Pinnacle == 9
+    pinnacle <- html_children(child1)[9] %>%
+      html_children() %>%
+      html_text()
+    pinnacle_h <- pinnacle[[1]]
+    pinnacle_a <- pinnacle[[2]]
+    pinnacle_t <- pinnacle[[3]]
+    
+    # 5 dimes == 10
+    fiveDimes <- html_children(child1)[10] %>%
+      html_children() %>%
+      html_text()
+    fiveDimes_h <- fiveDimes[[1]]
+    fiveDimes_a <- fiveDimes[[2]]
+    fiveDimes_t <- fiveDimes[[3]]
+    
+    # Bookmaker == 11
+    bookmaker <- html_children(child1)[11] %>%
+      html_children() %>%
+      html_text()
+    bookmaker_h <- bookmaker[[1]]
+    bookmaker_a <- bookmaker[[2]]
+    bookmaker_t <- bookmaker[[3]]
+    
+    # BetOnline == 12
+    BOL <- html_children(child1)[12] %>%
+      html_children() %>%
+      html_text()
+    BOL_h <- BOL[[1]]
+    BOL_a <- BOL[[2]]
+    BOL_t <- BOL[[3]]
+    
+    # Bovada == 13
+    Bovada <- html_children(child1)[13] %>%
+      html_children() %>%
+      html_text()
+    Bovada_h <- Bovada[[1]]
+    Bovada_a <- Bovada[[2]]
+    Bovada_t <- Bovada[[3]]
+    
+    # Heritage == 14
+    Heritage <- html_children(child1)[14] %>%
+      html_children() %>%
+      html_text()
+    Heritage_h <- Heritage[[1]]
+    Heritage_a <- Heritage[[2]]
+    Heritage_t <- Heritage[[3]]
+    
+    # Intertops == 15
+    Intertops <- html_children(child1)[15] %>%
+      html_children() %>%
+      html_text()
+    Intertops_h <- Intertops[[1]]
+    Intertops_a <- Intertops[[2]]
+    Intertops_t <- Intertops[[3]]
+    
+    # YouWager == 16
+    youwager <- html_children(child1)[16] %>%
+      html_children() %>%
+      html_text()
+    youwager_h <- youwager[[1]]
+    youwager_a <- youwager[[2]]
+    youwager_t <- youwager[[3]]
+    
+    # JustBet == 17
+    justbet <- html_children(child1)[17] %>%
+      html_children() %>%
+      html_text()
+    justbet_h <- justbet[[1]]
+    justbet_a <- justbet[[2]]
+    justbet_t <- justbet[[3]]
+    
+    # SportsBetting == 18
+    sportsbet <- html_children(child1)[18] %>%
+      html_children() %>%
+      html_text()
+    sportsbet_h <- sportsbet[[1]]
+    sportsbet_a <- sportsbet[[2]]
+    sportsbet_t <- sportsbet[[3]]
+    
+    
+    
+    ## dataframe results
+    game_lines <- as.data.frame(t(c(DATE,
+                                    sport,
+                                    homeTeam,
+                                    awayTeam,
+                                    home_1,
+                                    home_2,
+                                    away_1,
+                                    away_2,
+                                    home_score,
+                                    away_score,
+                                    home_open,
+                                    away_open,
+                                    pinnacle_h,
+                                    pinnacle_a,
+                                    pinnacle_t,
+                                    fiveDimes_h,
+                                    fiveDimes_a,
+                                    fiveDimes_t,
+                                    bookmaker_h,
+                                    bookmaker_a,
+                                    bookmaker_t,
+                                    BOL_h,
+                                    BOL_a,
+                                    BOL_t,
+                                    Bovada_h,
+                                    Bovada_a,
+                                    Bovada_t,
+                                    Heritage_h,
+                                    Heritage_a,
+                                    Heritage_t,
+                                    Intertops_h,
+                                    Intertops_a,
+                                    Intertops_t,
+                                    youwager_h,
+                                    youwager_a,
+                                    youwager_t,
+                                    justbet_h,
+                                    justbet_a,
+                                    justbet_t,
+                                    sportsbet_h,
+                                    sportsbet_a,
+                                    sportsbet_t,
+                                    oddsURL
+    )))
+    
+    ## save game results
+    final_lines <- rbind(final_lines, game_lines)
+  }
+  
+  # name columns
+  colnames(final_lines) <- c("date",
+                             "sport",
+                             "home_team",
+                             "away_team",
+                             "home_1H",
+                             "home_2H",
+                             "away_1H",
+                             "away_2H",
+                             "home_score",
+                             "away_score",
+                             "home_open",
+                             "away_open",
+                             "pinnacle_h",
+                             "pinnacle_a",
+                             "pinnacle_t",
+                             "fiveDimes_h",
+                             "fiveDimes_a",
+                             "fiveDimes_t",
+                             "bookmaker_h",
+                             "bookmaker_a",
+                             "bookmaker_t",
+                             "BOL_h",
+                             "BOL_a",
+                             "BOL_t",
+                             "Bovada_h",
+                             "Bovada_a",
+                             "Bovada_t",
+                             "Heritage_h",
+                             "Heritage_a",
+                             "Heritage_t",
+                             "Intertops_h",
+                             "Intertops_a",
+                             "Intertops_t",
+                             "youwager_h",
+                             "youwager_a",
+                             "youwager_t",
+                             "justbet_h",
+                             "justbet_a",
+                             "justbet_t",
+                             "sportsbet_h",
+                             "sportsbet_a",
+                             "sportsbet_t",
+                             "odds_URL")
+  
+  
+  
+  # Done and done
+  message(glue("Scraped Day: {DATE}"))
+  return(final_lines)
+}
+
+get_lines_hist_soccer <- function(sport,
+                                  start_date,
+                                  end_date) {
+  
+  # initialize results
+  final_lines <- data.frame()
+  
+  ## Error handling
+  if (is.na(as.Date(as.character(start_date), "%Y%m%d"))) {
+    stop("Start Date format is wrong")
+  }
+  
+  # Sport for URL
+  SPORT <- case_when(
+    sport == "soccer_epl" ~ "english-premier-league",
+    TRUE ~ NA_character_
+  )
+  if (is.na(SPORT)) {
+    stop("Sport must be in c('soccer_epl')")
+  }
+  
+  
+  day_list <- seq(as.Date(start_date, "%Y%m%d"), as.Date(end_date, "%Y%m%d"), by = "days")
+  
+  day_list <- gsub("-", "", as.character(day_list))
+  
+  
+  
+  df <- lapply(day_list, function(day_list)
+    tryCatch(get_lines_soccer(sport,
+                              day_list),
+             error = function(e) e)
+    
+  )
+  
+  
+  df <- df[sapply(df, is.data.frame)]                  
+  
+  df <- Reduce(function(...) merge(..., all = TRUE), df)
+  
+  return(df)
+}
+
 
 
 

@@ -13,16 +13,17 @@ knitr::opts_chunk$set(warning = F)
 knitr::opts_chunk$set(message = F)
 ```
 
-# Data
-
-```{r}
+```{r include=F}
 library(tidyverse)
+library(scales)
 ```
 
-```{r}
-odds_df <- get_lines_hist_soccer(sport = "soccer_epl",
-                           start_date = "20201205",
-                           end_date = "20201206")
+# Data
+
+
+
+```{r include=F}
+odds_df <- read.csv("/Users/markusfiordaliso/Documents/coding_projects/sports_bet/soccer_bet_win_draw/data/soccer_epl_20150201_20201210.csv")
 ```
 
 ## Tidy
@@ -33,12 +34,105 @@ source("/Users/markusfiordaliso/Documents/coding_projects/sports_bet/odds_functi
 # use pinnacle
 sports_book <- "pinnacle"
 
-odds_df <- odds_book_remove_fn(odds_df, sports_book)
+odds_df <- odds_book_remove_fn(odds_df, sports_book, "yes")
+
+odds_df <- odds_df %>% 
+  select(-c(home_open, away_open, odds_URL))
+
+# map favorite and underdog
+odds_df <- soccer_fav_und_map_fn(odds_df, sports_book)
 
 
+# REMOVE NAS
+odds_df <- odds_df %>% 
+  filter(!is.na(pinnacle_h), !is.na(pinnacle_a), !is.na(pinnacle_t), !is.na(home_score))
+
+```
+
+# Overview
+
+```{r}
+
+outcome_summary <- odds_df %>% 
+  count(outcome) %>% 
+  mutate(freq = n / sum(n))
+
+
+outcome_summary %>% 
+  ggplot(aes(x = outcome, y = n, fill = outcome)) +
+  geom_col(color = "black") +
+  geom_text(aes(label = percent(round(freq, 3))),
+            vjust = -0.5) +
+  labs(x = "Outcome",
+       y = "Sample Size",
+       title = "Match Outcomes") +
+  theme(legend.position = "none")
+
+```
+# Bet Outcomes
+
+Bet strategies
+
+* und_win = underdog outright
+* fav_win = favorite outright
+* tie = tie outright
+* und_tie = bet equal amount on underdog and tie
+* fav_tie = bet equal amount on favorite and tie
+```{r}
+
+
+bet_ouritght_payout_fn <- function(df, wager, odd_col) {
+  
+  result <- ifelse(odd_col == "tie_odd","tie", 
+                    ifelse(odd_col == "und_odd","und_win", 
+                           ifelse(odd_col == "fav_odd", "fav_win", stop(glue("odd_col selection must be in c('tie_odd', 'und_odd', 'fav_odd')")))))
+
+  ifelse(df$outcome == result, wager * odd_fraction_fn(eval(expr(`$`(df, !!odd_col)))), -wager) / wager
+}
+
+bet_und_tie_fn <- function(df, wager, odd_col) {
+  
+    result <- ifelse(odd_col == "tie_odd","tie", 
+                    ifelse(odd_col == "und_odd","und_win", 
+                           ifelse(odd_col == "fav_odd", "fav_win", stop(glue("odd_col selection must be in c('tie_odd', 'und_odd', 'fav_odd')")))))
+
+  ifelse(df$outcome == result, wager * odd_fraction_fn(eval(expr(`$`(df, !!odd_col)))) - wager,
+         ifelse(df$outcome == "tie", wager * odd_fraction_fn(df$tie_odd) - wager, -2 * wager)) / (2 * wager)
+}
+
+
+# create columns for strategies
+odds_df$fav_return <- bet_ouritght_payout_fn(odds_df, 1, "fav_odd")
+odds_df$und_return <- bet_ouritght_payout_fn(odds_df, 1, "und_odd")
+odds_df$tie_return <- bet_ouritght_payout_fn(odds_df, 1, "tie_odd")
+
+odds_df$fav_tie_return <- bet_und_tie_fn(odds_df, 1, "fav_odd")
+odds_df$und_tie_return <- bet_und_tie_fn(odds_df, 1, "und_odd")
+
+strategy_col <- c("fav_return", "und_return", "tie_return", "fav_tie_return", "und_tie_return")
+
+
+outright_bet_summary <- sapply(odds_df[, colnames(odds_df) %in% strategy_col], mean)
+
+outright_bet_summary <- enframe(outright_bet_summary, "strategy", "observed_return") %>% 
+  mutate(pos_neg_color = ifelse(observed_return > 0, "green", "red"))
+
+
+outright_bet_summary %>% 
+  ggplot(aes(x = strategy, y = observed_return, fill = pos_neg_color)) +
+  geom_col(color = "black") +
+  scale_fill_identity() +
+  geom_text(aes(label = round(observed_return, 2)),
+            vjust = 1)
 
 ```
 
 
+Bet underdog & tie
 
+```{r}
+
+
+
+```
 

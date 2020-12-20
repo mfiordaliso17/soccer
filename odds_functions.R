@@ -38,7 +38,7 @@ odds_manipulate_fn <- function(df) {
   
 }
 
-odds_book_remove_fn <- function(df, sports_book) {
+odds_book_remove_fn <- function(df, sports_book, tie) {
   
   #error handle
   sports_book_list <- c("pinnacle",
@@ -56,13 +56,28 @@ odds_book_remove_fn <- function(df, sports_book) {
     
     stop(glue("sports_book must be in c({book_list})"))
     
-    }
+  }
+  
+  if (!(tie %in% c("", "yes"))) {
+    
+    stop(glue("tie must be blank or 'yes'"))
+    
+  }
 
   # remove other books
   book_remove <- sports_book_list[sports_book_list != sports_book]
   
+  
+  if (tie == "yes") {
+    
+    book_remove <- unlist(lapply(book_remove, function(book_remove) c(paste0(book_remove, "_h"),
+                                                                      paste0(book_remove, "_a"),
+                                                                      paste0(book_remove, "_t"))))
+    
+  } else {
   book_remove <- unlist(lapply(book_remove, function(book_remove) c(paste0(book_remove, 1),
                                              paste0(book_remove, 2))))
+  }
   
   
   df <- df[, !colnames(df) %in% book_remove]
@@ -208,6 +223,33 @@ odd_fraction_fn <- function(odd) {
   odd_factor <- ifelse(odd < 0, -100 / odd, odd / 100)
   
   return(odd_factor)
+}
+
+soccer_fav_und_map_fn <- function(df, sports_book) {
+  
+  away_book <- paste0(sports_book, "_a")
+  home_book <- paste0(sports_book, "_h")
+  
+  
+  df <- df %>% 
+    mutate(home_fav = ifelse(!!sym(home_book) < !!sym(away_book), 1, 0),
+           # scores
+           fav_1h_score = ifelse(home_fav == 1, home_1H, away_1H),
+           fav_2h_score = ifelse(home_fav == 1, home_2H, away_2H),
+           und_1h_score = ifelse(home_fav == 0, home_1H, away_1H),
+           und_2h_score = ifelse(home_fav == 0, home_2H, away_2H),
+           # odds
+           fav_odd = ifelse(home_fav == 1, !!sym(home_book), !!sym(away_book)),
+           und_odd = ifelse(home_fav == 0, !!sym(home_book), !!sym(away_book)),
+           tie_odd = !!sym(paste0(sports_book, "_t")),
+           # final
+           fav_final = ifelse(home_fav == 1, home_score, away_score),
+           und_final = ifelse(home_fav == 0, home_score, away_score),
+           outcome = ifelse(fav_final == und_final, "tie",
+                            ifelse(fav_final > und_final, "fav_win", "und_win")))
+    
+  return(df)
+  
 }
 
 

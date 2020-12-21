@@ -117,22 +117,96 @@ outright_bet_summary <- sapply(odds_df[, colnames(odds_df) %in% strategy_col], m
 outright_bet_summary <- enframe(outright_bet_summary, "strategy", "observed_return") %>% 
   mutate(pos_neg_color = ifelse(observed_return > 0, "green", "red"))
 
+# fix levels
+outright_bet_summary$strategy <- factor(outright_bet_summary$strategy, levels = c("fav_return",
+                                                 "und_return",
+                                                 "tie_return",
+                                                 "fav_tie_return",
+                                                 "und_tie_return"))
 
 outright_bet_summary %>% 
   ggplot(aes(x = strategy, y = observed_return, fill = pos_neg_color)) +
   geom_col(color = "black") +
   scale_fill_identity() +
-  geom_text(aes(label = round(observed_return, 2)),
-            vjust = 1)
+  geom_text(aes(label = percent(round(observed_return, 3))),
+            vjust = 1) +
+  labs(title = "Observed Return",
+       y = "Return")
 
 ```
 
 
-Bet underdog & tie
+refine odd selection for underdog tie strategy
+
+```{r}
+# create odd bins or loop to include specific range
+
+interval_amt <- 100
+
+
+odds_df <- odds_df %>% 
+  mutate(und_odd_bin = cut(und_odd,
+                           breaks = seq(100, 800, by = interval_amt),
+                           right = T,
+                           dig.lab = 4))
+                            
+
+strategy_group_summary <- odds_df %>% 
+  group_by(und_odd_bin) %>% 
+  summarize(und_tie_return = mean(und_tie_return),
+            und_return = mean(und_return),
+            tie_return = mean(tie_return),
+            sample_size = n()) %>% 
+  ungroup()
+
+strategy_group_summary <- strategy_group_summary %>% 
+  gather(c(2:4), key = "strategy", value = "strategy_return") %>% 
+  filter(!is.na(und_odd_bin))
+
+strategy_group_summary %>% 
+  ggplot(aes(x = und_odd_bin, y = strategy_return, fill = strategy)) +
+  geom_col(position = "dodge", color = "black") +
+  labs(title = "Observed Return by Underdog Odd Bin",
+       y = "Return",
+       x = "Odd Bin")
+
+
+strategy_group_summary %>%
+  filter(strategy == "tie_return") %>% 
+  ggplot(aes(x = und_odd_bin, y = sample_size)) +
+  geom_col(fill = "purple", color = "black") +
+  labs(title = "Sample Size",
+       y = "Count",
+       x = "Odd Bin")
+
+
+  
+```
+
+```{r}
+odds_df %>% 
+  group_by(und_odd_bin) %>% 
+  count(outcome) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  ggplot(aes(x = und_odd_bin, y = freq, fill = outcome)) +
+  geom_col(color = "black", position = "dodge") +
+  labs(title = "Match Outcomes",
+       y = "Frequency",
+       x = "Odd Bin")
+  
+
+
+
+odds_df %>% 
+  filter(und_odd_bin == "(100,200]") %>% 
+  ggplot(aes(x = tie_odd)) +
+  geom_density()
+```
+
+# Tie
 
 ```{r}
 
-
-
+  
 ```
 

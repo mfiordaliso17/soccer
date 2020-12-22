@@ -206,6 +206,43 @@ odds_df %>%
 # Tie
 
 ```{r}
+interval_amt <- 25
+
+odds_df <- odds_df %>% 
+  mutate(tie_odd_bin = cut(tie_odd,
+                           breaks = seq(100, 800, by = interval_amt),
+                           right = T,
+                           dig.lab = 4))
+
+
+tie_group_summary <- odds_df %>% 
+  group_by(tie_odd_bin) %>% 
+  summarize(tie_return = mean(tie_return),
+            sample_size = n()) %>% 
+  ungroup() %>% 
+  mutate(pos_neg_color = ifelse(tie_return > 0, "green", "red"))
+
+
+tie_group_summary %>% 
+  ggplot(aes(x = tie_odd_bin, y = tie_return, fill = pos_neg_color)) +
+  geom_col(color = "black") +
+  scale_fill_identity() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Observed return when betting the tie")
+
+
+tie_outcome_summary <- odds_df %>% 
+  group_by(tie_odd_bin) %>% 
+  count(outcome) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  ungroup() 
+
+tie_outcome_summary %>% 
+  filter(outcome == "tie") %>% 
+  ggplot(aes(x = tie_odd_bin, y = freq)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Observed probability of a tie occuring")
 
   
 ```

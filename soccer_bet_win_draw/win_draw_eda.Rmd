@@ -78,6 +78,8 @@ Bet strategies
 * tie = tie outright
 * und_tie = bet equal amount on underdog and tie
 * fav_tie = bet equal amount on favorite and tie
+
+
 ```{r}
 
 

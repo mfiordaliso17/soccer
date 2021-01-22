@@ -1,0 +1,497 @@
+---
+title: "NFL Hedge Strategy"
+author: "Markus Fiordaliso"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message = F)
+```
+
+
+# Data
+
+```{r include=F}
+# package
+library(plyr)
+library(tidyverse)
+library(scales)
+library(VIM)
+library(lubridate)
+library(gridExtra)
+library(glue)
+library(rlang)
+```
+
+
+```{r include=F}
+odds_df <- read.csv("/Users/markusfiordaliso/Documents/R/sports_bet/hedge/hedge_data/nfl_20100701_20201012_ml.csv") %>% 
+  select(-odds_URL)
+```
+
+## Missing Data
+
+
+Bovada seems to be missing the most data. I will leverage Pinnacle due the legitimacy of the book, coupled with the relatively low levels of missing data.
+
+Some scores are missing. After doing some research on a few of these instances, it looks like sportsbookreview is missing these scores even though the game took place. This can be expected to some degree since I didn't pay for the data. I will factor these out of the analysis
+```{r}
+missing <- map_df(odds_df, ~sum(is.na(.))) %>% 
+  select_if(~any(. > 0))
+
+aggr(odds_df[ , colnames(odds_df) %in% colnames(missing)],
+     sortVars = T,
+     cex.axis = 0.4,
+     oma = c(4,2,1,1))
+                           
+# remove missing scores from df
+odds_df <- odds_df %>% 
+  filter(!is.na(away_4Q))
+```
+
+
+## Tidy
+
+```{r}
+source("/Users/markusfiordaliso/Documents/coding_projects/sports_bet/odds_functions.R")
+odds_df <- odds_manipulate_fn(odds_df)
+
+# using pinnacle as the book
+sports_book <- "pinnacle"
+
+# filter out missing odds
+odds_df <- odds_df %>% 
+  filter(!is.na(pinnacle1), !is.na(pinnacle2))
+
+odds_df <- odds_book_remove_fn(odds_df, sports_book)
+```
+
+
+# Odds Overview
+
+Exploring the frequency each odd occurs, as this will give me a better feel on how often I can execute strategies that might target specific odd thresholds. -200:200 is the most frequent odds, which is what I would expect.
+```{r fig.width=7}
+odds_df <- fav_und_odd_score_fn(odds_df, sports_book)
+
+
+
+fav_odd_dist <- odds_df %>% 
+  ggplot(aes(x = fav_odd)) +
+  geom_histogram(binwidth = 100,
+                 aes(y = stat(count) / sum(count)),
+                 color = "black",
+                 fill = "purple",
+                 closed = "right",
+                 boundary = 0) +
+  scale_x_continuous(breaks = seq(-1000, 0, by = 100)) +
+  coord_cartesian(xlim = c(-1000, 0),
+                  ylim = c(0, 0.6)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(y = "Frequency",
+       title = "NFL Favorite Odds Frequency",
+       caption = "Excluded odds exceeding -1000")
+
+
+und_odd_dist <- odds_df %>% 
+  ggplot(aes(x = und_odd)) +
+  geom_histogram(binwidth = 100,
+                 aes(y = stat(count) / sum(count)),
+                 color = "black",
+                 fill = "light blue",
+                 closed = "left",
+                 boundary = 0) +
+  scale_x_continuous(breaks = seq(-100, 1000, by = 100)) +
+  coord_cartesian(xlim = c(-200, 1000),
+                  ylim = c(0, 0.6)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(y = "Frequency",
+       title = "NFL Underdog Odds Frequency",
+       caption = "Excluded odds exceeding +1000")
+
+grid.arrange(fav_odd_dist, und_odd_dist, nrow = 1)
+```
+Books do not offer true odds since they are the ones who bear the risk. The books take a 5-10% cut on most bets as seen below. However, as the odds gap between teams increases, so does the cut that the book takes. This is probably to make up for the lack of liquidity on both sides of the bet, and reduce the overall risk that the book takes on.
+
+```{r fig.width=7}
+odds_df <- odds_df %>% 
+  mutate(book_spread = abs(ifelse(und_odd > 0, fav_odd + und_odd, fav_odd + 100 + und_odd + 100)) / 100 / 2)
+
+book_spead_view <- odds_df %>% 
+  ggplot(aes(x = book_spread)) +
+  geom_histogram(aes(y = stat(count) / sum(count)),
+                 binwidth = 0.05,
+                 boundary = 0,
+                 closed = "left",
+                 color = "black",
+                 fill = "purple") +
+  coord_cartesian(xlim = c(0, 1),
+                  ylim = c(0, 0.5)) +
+  scale_x_continuous(breaks = seq(0, 1, 0.05)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(y = "Frequency",
+       title = "Sports Book Spread per $1")
+  
+spread_odd_view <- odds_df %>% 
+  ggplot(aes(y = und_odd, x = book_spread)) +
+  geom_point() +
+  geom_smooth() +
+  scale_x_continuous(breaks = seq(1, 10, 1),
+                     labels = percent) +
+  labs(title = "Book Spread vs Odds Relationship")
+
+grid.arrange(book_spead_view, spread_odd_view, ncol = 2)
+```
+
+# Odd Volatility Strategy
+
+Picking outright winners can be a challenging feat to generate sustainable profits. Instead I want to focus around hedging a bet during the game to lock in a profit, regardless of outcome. The hypothesis is that if a money line position is taken before a game, at some point the odds will improve with respect to the selection and an opportunity will present itself to lock in a profit. Specifically, I want to focus on underdogs as this will provide more upside to guarantee a profit as seen below. However, I will look at both sides when digging into lead changes. Also, it's important to note that in a hedge position, the book spread can be perceived as doubling since I will have to swing around and take the opposing side of a bet, which will hinder profitability.
+
+
+```{r}
+odds <- round(c(seq(-300, -100, by = 20), seq(120, 300, by = 20)), 0)
+odds_fctr <- ifelse(odds < 0, -100 / odds, odds / 100)
+odd_tradeoff <- data.frame(odds,
+                           odds_fctr)
+
+odd_tradeoff %>% 
+  ggplot(aes(x = factor(odds), y = odds_fctr)) +
+  geom_col(color = "black", fill = "purple") +
+  scale_y_continuous(labels = percent, breaks = seq(0, 3, 0.5)) +
+  labs(x = "Odds",
+       y = "Profit",
+       title = "Odd & Profit Tradeoff")
+```
+
+## Lead Changes
+
+Since I don't have access to historical live odds, I will use lead changes as a proxy to determine changes in odds. The magnitude of the change will be impossible to confirm with this data/approach, but directionally this should give me an idea on how successful this strategy may be. Also, it is important to note that I only have access to scores at the end of each quarter. As a result the true success of this strategy will be limited as I will not be able to capture all lead changes.
+
+
+```{r}
+# create var to see if a lead change happened
+odds_df <- interval_lead_fn(odds_df, 4)
+
+# summary tables
+fav_lead_chg_summary <- lead_chg_qtr_summary_fn(odds_df, "favorite")
+und_lead_chg_summary <- lead_chg_qtr_summary_fn(odds_df, "underdog")
+```
+
+### Quarters led per game
+
+When looking at all games in this data set, there are a few important things to call out:
+
+* 42.7% chance that the underdog doesn't lead a quarter
+    + This means that an opportunity to hedge may not present itself
+* 79.5% chance that the favorite leads at least 1 quarter
+    + Opting to hedge the favorite would requires substantial success, because the margin for profit is significantly lower relative to betting the underdog
+
+
+```{r}
+# graph
+lead_chg_summary <- bind_rows(fav_lead_chg_summary, und_lead_chg_summary)
+
+lead_chg_summary %>% 
+  ggplot(aes(x = quarters_led, y = freq, fill = type)) +
+  geom_col(position = "dodge",
+           color = "black") +
+  geom_text(aes(label = percent(freq)),
+            position = position_dodge(width = 1),
+            vjust = -0.3,
+            size = 2.5) +
+  scale_y_continuous(labels = percent) + 
+  labs(x = "Quarters Led",
+       y = "Frequency",
+       title = "Baseline: Quarters led per game",
+       fill = "")
+```
+
+In the initial cut, I was looking at all odds and favorites. Now I will narrow the range to see if that improves the underdog's potential to lead for at least 1 quarter and see how that compares against the baseline, which includes all odds
+
+Unsurprisingly, the proportion of games that an underdog doesn't lead at least 1 quarter decreases significantly. Conversely, the proportion of games that a favorite leads all quarters also decreases significantly. As the odds range narrows, I would expect there to be closer games and more volatility throughout the game with respect to score. 
+
+
+```{r}
+# create range -200:200 to better see if % improve from view above
+odds_range <- c(-200, 200)
+
+range_odds_df <- odds_df %>% 
+  filter(und_odd <= max(odds_range),
+         und_odd >= min(odds_range))
+
+# summary tables
+range_fav_lead_chg_summary <- lead_chg_qtr_summary_fn(range_odds_df, "favorite")
+range_und_lead_chg_summary <- lead_chg_qtr_summary_fn(range_odds_df, "underdog")
+```
+
+```{r}
+range_lead_chg_summary <- bind_rows(range_fav_lead_chg_summary, range_und_lead_chg_summary) 
+
+
+range_lead_chg_diff <- range_lead_chg_summary[c(1, 3, 4)] %>% 
+  left_join(lead_chg_summary[c(1, 3, 4)], by = c("quarters_led", "type")) %>% 
+  mutate(range_diff = (freq.x - freq.y) * 100)
+
+
+range_lead_chg_summary %>% 
+  ggplot(aes(x = quarters_led, y = freq, fill = type)) +
+  geom_col(position = "dodge",
+           color = "black") +
+  geom_text(aes(label = percent(freq)),
+            position = position_dodge(width = 1),
+            vjust = -0.3,
+            size = 2.5) +
+  scale_y_continuous(labels = percent) + 
+  labs(x = "Quarters",
+       y = "Frequency",
+       title = "Range: Quarters led per game",
+       fill = "",
+       caption = glue("Only using odds {min(odds_range)} to {max(odds_range)}")) 
+
+
+range_lead_chg_diff %>% 
+  ggplot(aes(x = quarters_led, y = range_diff, fill = type)) +
+  geom_col(position = "dodge",
+           color = "black") +
+  geom_text(aes(label = round(range_diff, 2)),
+            position = position_dodge(width = 1),
+            vjust = -0.3,
+            size = 2.5) +
+  labs(x = "Quarters",
+       y = "pps",
+       title = "Range variance to Baseline",
+       fill = "")
+```
+### Lead at least 1 quarter
+
+Since I don't care about the outright winner for this strategy, I only need 1 lead change to shift the odds in the favor of a bet to offer a hedge opportunity to lock in a profit.
+
+
+```{r fig.width=10}
+interval_amt <- 50
+# excluding out abs ods of 900 as the sample size is too small. Also not including underdogs that have negative lines
+
+odds_df <- odds_df %>% 
+  mutate(fav_odd_group = cut(fav_odd,
+                             breaks = seq(-600, -100, by = interval_amt),
+                             right = T,
+                             dig.lab = 4),
+         #excluding underdogs who are -
+         und_odd_group = cut(und_odd, 
+                             breaks = seq(100, 600, by = interval_amt),
+                             right = T, 
+                             dig.lab = 4))
+
+
+und_group_summary <- odds_df %>% 
+  filter(!is.na(und_odd_group)) %>% 
+  group_by(und_quarters_cum_lead, und_odd_group) %>% 
+  summarize(count = n(),
+            type = "underdog") %>% 
+  group_by(und_odd_group) %>% 
+  mutate(freq = count / sum(count)) %>% 
+  rename(c("odd_group" = "und_odd_group",
+           "quarters_led" = "und_quarters_cum_lead"))
+
+fav_group_summary <- odds_df %>% 
+  filter(!is.na(fav_odd_group)) %>% 
+  group_by(fav_quarters_cum_lead, fav_odd_group) %>% 
+  summarize(count = n(),
+            type = "favorite") %>% 
+  group_by(fav_odd_group) %>% 
+  mutate(freq = count / sum(count)) %>% 
+  rename(c("odd_group" = "fav_odd_group",
+           "quarters_led" = "fav_quarters_cum_lead"))
+
+# combined df
+
+group_summary <- rbind(fav_group_summary, und_group_summary)
+
+sample_size <- group_summary %>% 
+  group_by(type, odd_group) %>% 
+  summarize(sample_size = sum(count)) %>% 
+  ungroup()
+
+
+# lead at least one quarter
+one_qtr_min <- group_summary %>% 
+  filter(quarters_led > 0) %>% 
+  group_by(odd_group, type) %>% 
+  summarize(cum_freq = sum(freq)) %>% 
+  ungroup() %>% 
+  left_join(sample_size, by = c("type", "odd_group"))
+
+
+
+```
+
+To better see trends amongst the odds, I'm going to bucket the odds into bins and see how they perform.
+
+As expected, there is a strong inverse relationship between the odds group and probaility that the group led at least 1 quarter. The correlation is `r round(cor(as.numeric(one_qtr_min$odd_group), one_qtr_min$cum_freq), 2)`. Overall, this relationship appears to be somewhat linear.
+
+Given limited upside when betting large favorites, I want to focus on small favorites and small to medium underdogs. Also, the lack of a sample size with some of the more extreme odds is a factor into this decision.
+
+```{r fig.width=9, fig.height=5}
+one_qtr_graph <- one_qtr_min %>% 
+  ggplot(aes(x = odd_group, y = cum_freq, fill = type)) +
+  geom_col() +
+  geom_smooth(aes(x = as.numeric(odd_group), y = cum_freq),
+              se = F) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "bottom") +
+  labs(x = "Odd Bins",
+       y = "Frequency",
+       title = "Leading at least 1 qtr per game",
+       fill = "")
+
+
+one_qtr_sample_size_graph <- one_qtr_min %>% 
+  ggplot(aes(x = odd_group, y = sample_size, fill = type)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "bottom") +
+  scale_y_continuous(breaks = seq(0, round_any(max(one_qtr_min$sample_size), f = ceiling, accuracy = 100), by = 100)) +
+  labs(x = "Odd Bins",
+       y = "Count",
+       title = "Sample size",
+       fill = "")
+
+
+grid.arrange(one_qtr_graph, one_qtr_sample_size_graph,
+             nrow = 1)
+```
+
+
+### When does the lead change occur
+
+Assessing when the initial lead change occurs is important to understand when a hedge opportunity may present itself. Also, since odd changes are like correlated with when the lead exists in the game, understanding when the final lead change occurs may allow additional upside to be realized in a hedge. In addition to the timing of the lead change, the magnitude of the lead change is also important when assessing hedge opportunities. However, since I don't have access to live odds, I'm going to choose to table this and potentially come back to it.
+
+*Initial lead change:*
+
+* If a lead change is going to occur at all in the game, there is a strong probability that occurs in the first quarter
+* Across most of the odd bins, there is a relatively small chance that if a lead change doesn't occur in the first half that it will occur in the second
+
+*Final lead change:*
+
+* The final lead change is somewhat misleading as a majority of the final lead changes, if they are to occur, take place in 4th quarter across all odd bins. This simply reflects the winners of the game
+* There is minimal final lead changes that occur in quarters 1-3 for all favorite odd bins, if a lead change is going to occur
+* For the underdog odd bins the probability of a final lead change occurring quarters 1-3, but not at the end of the game, increases
+
+Factoring in these insights into a strategy, if a hedge position is desired it may make sense to hedge within the first two quarters. Also, if a hedge opportunity does not present itself in the first two quarters, it may make sense to exit the bet by betting the current favorite to limit losses.
+
+```{r}
+
+# col for lead change
+fav_lead_name <- c("fav_1Q_lead", "fav_2Q_lead", "fav_3Q_lead", "fav_4Q_lead")
+und_lead_name <- c("und_1Q_lead", "und_2Q_lead", "und_3Q_lead", "und_4Q_lead")
+
+# fav variables
+odds_df$fav_initial_qtr_lead <- lead_qtr_occur_fn(odds_df, fav_lead_name, "favorite", "first")
+odds_df$fav_last_qtr_lead <- lead_qtr_occur_fn(odds_df, fav_lead_name, "favorite", "last")
+
+
+# und variables
+odds_df$und_initial_qtr_lead <- lead_qtr_occur_fn(odds_df, und_lead_name, "underdog", "first")
+odds_df$und_last_qtr_lead <- lead_qtr_occur_fn(odds_df, und_lead_name, "underdog", "last")
+
+
+# summary
+initial_qtr_summary <- bind_rows(lead_qtr_summary_fn(odds_df, "favorite", "initial"),
+                                 lead_qtr_summary_fn(odds_df, "underdog", "initial")) %>% 
+  filter(!is.na(odd_group))
+
+last_qtr_summary <- bind_rows(lead_qtr_summary_fn(odds_df, "favorite", "last"),
+                                 lead_qtr_summary_fn(odds_df, "underdog", "last")) %>% 
+  filter(!is.na(odd_group))
+
+# visualize
+
+initial_qtr_summary %>% 
+  ggplot(aes(x = odd_group, y = factor(initial_qtr_lead), fill = freq)) +
+  geom_tile() +
+  geom_text(aes(label = round(freq, 2)),
+            size = 2.5) +
+  scale_fill_gradient(high = "blue", low = "light blue") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(x = "Odd Bins",
+       y = "Quarter",
+       title = "When did the initial lead occur?",
+       caption = "*Quarter 0 reflects no lead change ever occurred")
+
+last_qtr_summary %>% 
+  ggplot(aes(x = odd_group, y = factor(last_qtr_lead), fill = freq)) +
+  geom_tile() +
+  geom_text(aes(label = round(freq, 2)),
+            size = 2.5) +
+  scale_fill_gradient(high = "blue", low = "light blue") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(x = "Odd Bins",
+       y = "Quarter",
+       title = "When did the final lead occur?",
+       caption = "*Quarter 0 reflects no lead change ever occurred")
+
+
+```
+## Profitability Target
+
+The view below shows the success rate needed given 2 inputs: expected return and profit target
+
+* Expected Return: The desired return on investment
+  + A value of 0 represents the break even point
+* Profit Target: The profit profit levels that the hedge is working to target
+  + 50% example: +150 initial odd is eventually hedged with a +150, locking in a 50% profit
+  + 0.25 example: +150 initial odd is eventually hedged with a +100, locking in a 25% profit
+
+
+```{r}
+
+# success and break even
+
+return_list <- seq(0.0, 1, by = 0.1)
+
+profit_return <- lapply(return_list, function(x) {
+
+  
+  profit_target <- seq(0.1, 1, by = 0.1)
+  
+  success <- (x + 1)/(1 + profit_target)
+  
+  # > 100% is not possible
+  success[success > 1] <- NA
+  
+  df <- data.frame(profit_target,
+                   success,
+                   expected_return = x)
+  
+  return(df)
+  })
+
+profit_return <- do.call(rbind, as.list(profit_return))
+
+profit_return %>% 
+  ggplot(aes(x = profit_target, y = success, color = as.factor(expected_return))) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Profit Target",
+       y = "Success Rate",
+       color = "Expected Return")
+
+```
+
+
+
+
+
+
+
+
+# Considerations
+* Lead changes might not occur until the final drive
+* Lead changes may result in not enough of a shift in odds to hedge
+* Having access to live odds would enable me to:
+  + Test the success of this strategy
+  + Find the optimal point of when it makes sense to hedge vs letting the bet ride out

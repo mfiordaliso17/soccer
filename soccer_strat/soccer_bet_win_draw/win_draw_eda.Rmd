@@ -157,12 +157,13 @@ strategy_group_summary <- odds_df %>%
   group_by(und_odd_bin) %>% 
   summarize(und_tie_return = mean(und_tie_return),
             und_return = mean(und_return),
+            fav_return = mean(fav_return),
             tie_return = mean(tie_return),
             sample_size = n()) %>% 
   ungroup()
 
 strategy_group_summary <- strategy_group_summary %>% 
-  gather(c(2:4), key = "strategy", value = "strategy_return") %>% 
+  gather(c(2:5), key = "strategy", value = "strategy_return") %>% 
   filter(!is.na(und_odd_bin))
 
 strategy_group_summary %>% 
@@ -170,7 +171,7 @@ strategy_group_summary %>%
   geom_col(position = "dodge", color = "black") +
   labs(title = "Observed Return by Underdog Odd Bin",
        y = "Return",
-       x = "Odd Bin")
+       x = "Underdog Odd Bin")
 
 
 strategy_group_summary %>%
@@ -179,7 +180,7 @@ strategy_group_summary %>%
   geom_col(fill = "purple", color = "black") +
   labs(title = "Sample Size",
        y = "Count",
-       x = "Odd Bin")
+       x = "Underdog Odd Bin")
 
 
   
@@ -245,6 +246,13 @@ tie_outcome_summary %>%
   geom_col() +
   theme(axis.text.x = element_text(angle = 90)) +
   labs(title = "Observed probability of a tie occuring")
+
+tie_outcome_summary %>% 
+  filter(outcome == "tie") %>% 
+  ggplot(aes(x = tie_odd_bin, y = n)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Sample Size")
 
   
 ```

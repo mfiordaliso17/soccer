@@ -22,7 +22,7 @@ get_lines <- function(sport,
   
   # initialize results
   final_lines <- data.frame()
-  
+
   # Sport for URL
   SPORT <- case_when(
     sport == "NFL" ~ "nfl-football",
@@ -77,7 +77,7 @@ get_lines <- function(sport,
       oddsURL <- glue("https://classic.sportsbookreview.com/betting-odds/{SPORT}/?date={DATE}")
     }
   }
-  
+
   
   ## need to loop eventually...
   oddspage <- read_html(oddsURL)
@@ -703,3 +703,11 @@ get_lines_hist_soccer <- function(sport,
   
   return(df)
 }
+
+
+get_lines_hist_soccer("soccer_epl",
+                      "20201201",
+                      "20201206")
+
+
+
